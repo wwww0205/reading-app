@@ -22,14 +22,23 @@
         
         .view-section { display: none; padding: 15px; padding-bottom: 70px; background: var(--bg-color); min-height: calc(100vh - 50px); }
         .book-list { display: flex; flex-wrap: wrap; gap: 15px; }
-        .book-item { width: calc(33.33% - 10px); background: var(--card-bg); border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
-        .book-cover-box { cursor: pointer; position: relative;}
+        .book-item { width: calc(33.33% - 10px); background: var(--card-bg); border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; display: flex; flex-direction: column;}
+        
+        .book-cover-box { cursor: pointer; position: relative; flex: 1;}
         .book-item img { width: 100%; height: 150px; object-fit: cover; background-color: #ddd; display: block; }
         .book-info { padding: 8px; cursor: pointer; }
         .book-title { font-size: 14px; font-weight: bold; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); }
         .book-author { font-size: 11px; color: #888; }
         .read-badge { position: absolute; top: 5px; left: 5px; background: rgba(76, 175, 80, 0.9); color: white; font-size: 11px; padding: 2px 5px; border-radius: 3px; z-index: 2; }
         
+        /* 统一的底部按钮样式 */
+        .action-btn { width: 100%; padding: 8px; border: none; font-size: 12px; cursor: pointer; font-weight: bold;}
+        .btn-add { background: var(--theme-color); color: white; }
+        .btn-added { background: #e0e0e0; color: #888; cursor: default; }
+        body.dark-mode .btn-added { background: #333; color: #666; }
+        .btn-remove { background: #ffebee; color: #d32f2f; }
+        body.dark-mode .btn-remove { background: #442222; color: #ff8888; }
+
         #detail-view, #reader-view { display: none; background: var(--bg-color); min-height: calc(100vh - 50px); padding-bottom: 70px; color: var(--text-color);}
         .chapter-list { list-style: none; padding: 15px; }
         .chapter-item { padding: 15px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 16px; }
@@ -100,7 +109,6 @@
     </div>
 
     <script>
-        // 主通道和备用通道
         const BASE_URL = "https://cdn.jsdelivr.net/gh/wwww0205/reading-app@main/";
         const FALLBACK_URL = "https://ghproxy.net/https://raw.githubusercontent.com/wwww0205/reading-app/main/";
         
@@ -113,10 +121,21 @@
         let isPageMode = false;
 
         function getShelf() { let shelf = localStorage.getItem("my_shelf"); return shelf ? JSON.parse(shelf) : []; }
-        function toggleShelf(bookId) {
+        
+        // 专门用于书城加书
+        function addToShelf(bookId) {
             let shelf = getShelf();
-            if (shelf.includes(bookId)) shelf = shelf.filter(id => id !== bookId);
-            else shelf.push(bookId);
+            if (!shelf.includes(bookId)) {
+                shelf.push(bookId);
+                localStorage.setItem("my_shelf", JSON.stringify(shelf));
+                renderBooks();
+            }
+        }
+
+        // 专门用于书架移出书
+        function removeFromShelf(bookId) {
+            let shelf = getShelf();
+            shelf = shelf.filter(id => id !== bookId);
             localStorage.setItem("my_shelf", JSON.stringify(shelf));
             renderBooks();
         }
@@ -169,11 +188,11 @@
                 const progress = getProgress(book.id);
                 const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
                 
-                // 图片双通道
                 const imgUrl = BASE_URL + book.cover;
                 const imgFallback = FALLBACK_URL + book.cover;
                 
-                const cardHTML = `
+                // 公共的封面和文字部分
+                const contentHTML = `
                     <div class="book-cover-box" onclick="openBook('${book.id}')">
                         ${badge}
                         <img src="${imgUrl}" onerror="this.src='${imgFallback}'; this.onerror=null;">
@@ -184,15 +203,22 @@
                     </div>
                 `;
 
+                // 1. 渲染到书城
                 const storeItem = document.createElement("div");
                 storeItem.className = "book-item";
-                storeItem.innerHTML = cardHTML + `<button style="width:100%;padding:6px;border:none;background:var(--theme-color);color:white;font-size:12px;" onclick="toggleShelf('${book.id}')">${isAdded?'移出书架':'+ 书架'}</button>`;
+                if (isAdded) {
+                    storeItem.innerHTML = contentHTML + `<button class="action-btn btn-added">已在书架</button>`;
+                } else {
+                    storeItem.innerHTML = contentHTML + `<button class="action-btn btn-add" onclick="addToShelf('${book.id}')">+ 加入书架</button>`;
+                }
                 storeList.appendChild(storeItem);
 
+                // 2. 渲染到书架
                 if (isAdded) {
                     const shelfItem = document.createElement("div");
                     shelfItem.className = "book-item";
-                    shelfItem.innerHTML = cardHTML;
+                    // 书架里显示红色的移出按钮
+                    shelfItem.innerHTML = contentHTML + `<button class="action-btn btn-remove" onclick="removeFromShelf('${book.id}')">移出书架</button>`;
                     shelfList.appendChild(shelfItem);
                 }
             });
