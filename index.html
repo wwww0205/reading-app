@@ -13,8 +13,6 @@
         body.sepia-mode { --bg-color: #f7e8c6; --text-color: #5b4636; --card-bg: #fdf5e6; }
 
         .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; font-size: 18px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
-        
-        /* 增大返回按钮的点击区域 */
         .header-btn { cursor: pointer; font-size: 15px; padding: 5px 10px; font-weight: normal; width: 70px; display: flex; align-items: center; z-index: 11;}
         .header-btn:active { opacity: 0.7; }
 
@@ -60,7 +58,6 @@
 <body>
 
     <div class="header">
-        <!-- 修复了返回按钮，点击更灵敏 -->
         <span id="back-btn" class="header-btn" style="visibility: hidden;" onclick="goBack()">← 返回</span>
         <span id="header-title" style="flex:1; text-align:center; padding-right:70px;">阅读器</span>
     </div>
@@ -105,8 +102,9 @@
     </div>
 
     <script>
-        const BASE_URL = "https://cdn.jsdelivr.net/gh/wwww0205/reading-app@main/";
-        const FALLBACK_URL = "https://ghproxy.net/https://raw.githubusercontent.com/wwww0205/reading-app/main/";
+        // 【核心修改】为了彻底绕开 jsDelivr 的顽固缓存，我们把主通道换成 ghproxy，把备用通道换成 jsDelivr
+        const BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/wwww0205/reading-app/main/";
+        const FALLBACK_URL = "https://cdn.jsdelivr.net/gh/wwww0205/reading-app@main/";
         
         let allBooks = [];
         let currentBook = null;
@@ -226,7 +224,6 @@
             currentBook = allBooks.find(b => b.id === bookId);
             if (!currentBook) return;
 
-            // 【核心修改】每次打开书，向浏览器塞入一条历史记录
             history.pushState({ page: 'catalog' }, '');
 
             document.getElementById("store-view").style.display = "none";
@@ -275,7 +272,6 @@
             const chap = currentCatalog[index];
             saveProgress(currentBook.id, index);
 
-            // 【核心修改】每次打开章节，向浏览器塞入一条历史记录
             history.pushState({ page: 'reader' }, '');
 
             document.getElementById("detail-view").style.display = "none";
@@ -309,10 +305,8 @@
 
         function changeChapter(offset) { openChapter(currentChapterIndex + offset); }
 
-        // 统一的返回逻辑（按钮点击和侧滑都会走这里）
         function goBack() {
             if (document.getElementById("reader-view").style.display === "block") {
-                // 从正文返回目录
                 document.getElementById("reader-view").style.display = "none";
                 document.getElementById("detail-view").style.display = "block";
                 document.getElementById("header-title").innerText = "目录";
@@ -320,7 +314,6 @@
                 document.getElementById("page-nav").style.display = "none";
                 renderBooks(); 
             } else if (document.getElementById("detail-view").style.display === "block") {
-                // 从目录返回书城/书架
                 document.getElementById("detail-view").style.display = "none";
                 document.getElementById("main-tabs").style.display = "flex";
                 document.getElementById("back-btn").style.visibility = "hidden";
@@ -328,7 +321,6 @@
             }
         }
 
-        // 【核心修改】监听手机自带的返回键/侧滑手势
         window.addEventListener('popstate', function(e) {
             goBack();
         });
