@@ -12,19 +12,15 @@
         body.dark-mode { --theme-color: #2c2c2c; --bg-color: #1a1a1a; --text-color: #999; --card-bg: #2a2a2a; }
         body.sepia-mode { --bg-color: #f7e8c6; --text-color: #5b4636; --card-bg: #fdf5e6; }
 
-        .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; font-size: 18px; }
-        .header-btn { cursor: pointer; font-size: 14px; padding: 5px; font-weight: normal; }
-        
-        .category-bar { display: flex; background: var(--card-bg); padding: 10px 0; border-bottom: 1px solid #ddd; justify-content: space-around; font-size: 15px; color: #666; }
-        .category-bar span { cursor: pointer; padding-bottom: 5px; }
-        .category-bar span.active { color: var(--theme-color); border-bottom: 2px solid var(--theme-color); font-weight: bold; }
+        .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; font-size: 18px; height: 50px;}
+        .header-btn { cursor: pointer; font-size: 14px; padding: 5px; font-weight: normal; width: 60px;}
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; height: 55px; background: var(--card-bg); border-top: 1px solid #ddd; display: flex; z-index: 30; }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; font-size: 12px; cursor: pointer; }
         .nav-item.active { color: var(--theme-color); }
         .nav-icon { font-size: 20px; margin-bottom: 2px; }
         
-        .view-section { display: none; padding: 15px; padding-bottom: 70px; background: var(--bg-color); min-height: calc(100vh - 55px); }
+        .view-section { display: none; padding: 15px; padding-bottom: 70px; background: var(--bg-color); min-height: calc(100vh - 50px); }
         .book-list { display: flex; flex-wrap: wrap; gap: 15px; }
         .book-item { width: calc(33.33% - 10px); background: var(--card-bg); border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
         .book-cover-box { cursor: pointer; position: relative;}
@@ -34,7 +30,7 @@
         .book-author { font-size: 11px; color: #888; }
         .read-badge { position: absolute; top: 5px; left: 5px; background: rgba(76, 175, 80, 0.9); color: white; font-size: 11px; padding: 2px 5px; border-radius: 3px; z-index: 2; }
         
-        #detail-view, #reader-view { display: none; background: var(--bg-color); min-height: calc(100vh - 55px); padding-bottom: 70px; color: var(--text-color);}
+        #detail-view, #reader-view { display: none; background: var(--bg-color); min-height: calc(100vh - 50px); padding-bottom: 70px; color: var(--text-color);}
         .chapter-list { list-style: none; padding: 15px; }
         .chapter-item { padding: 15px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 16px; }
         .chapter-item:hover { color: var(--theme-color); }
@@ -54,30 +50,27 @@
 
     <div class="header">
         <span id="back-btn" class="header-btn" style="visibility: hidden;" onclick="goBack()">← 返回</span>
-        <span id="header-title">书城</span>
-        <span style="width: 40px;"></span>
+        <span id="header-title" style="flex:1; text-align:center;">阅读器</span>
+        <span style="width: 60px;"></span>
     </div>
 
-    <div class="category-bar" id="category-bar">
-        <span class="active">推荐</span>
-        <span>排行</span>
-        <span>完结</span>
-        <span>分类</span>
-    </div>
-
+    <!-- 书城列表 -->
     <div id="store-view" class="view-section" style="display: block;">
         <div class="book-list" id="store-list"><div class="loading">正在加载书城...</div></div>
     </div>
 
+    <!-- 书架列表 -->
     <div id="shelf-view" class="view-section">
         <div class="book-list" id="shelf-list"><div class="loading">书架空空如也，快去书城加书吧~</div></div>
     </div>
 
+    <!-- 目录页 -->
     <div id="detail-view">
         <h2 id="detail-title" style="padding: 20px 15px 10px; font-size: 20px;"></h2>
         <ul class="chapter-list" id="chapter-list"></ul>
     </div>
 
+    <!-- 正文阅读页 -->
     <div id="reader-view">
         <h2 id="chapter-title" style="padding: 20px 15px 10px; font-size: 20px; text-align: center;"></h2>
         <div class="content-box" id="chapter-content">正在加载正文...</div>
@@ -88,6 +81,7 @@
         </div>
     </div>
 
+    <!-- 底部导航栏 -->
     <div class="bottom-nav" id="main-tabs">
         <div class="nav-item active" onclick="switchTab('store')">
             <div class="nav-icon">🏠</div>书城
@@ -97,6 +91,7 @@
         </div>
     </div>
 
+    <!-- 阅读工具栏 -->
     <div class="toolbar" id="toolbar">
         <button class="tool-btn" onclick="changeTheme()">背景</button>
         <button class="tool-btn" onclick="changeFontSize(-1)">A-</button>
@@ -105,9 +100,8 @@
     </div>
 
     <script>
-        // 原有的 jsDelivr 加速
+        // 主通道和备用通道
         const BASE_URL = "https://cdn.jsdelivr.net/gh/wwww0205/reading-app@main/";
-        // 【新增】备用通道 1：GitHub 镜像加速（如果 jsDelivr 卡住，换这个）
         const FALLBACK_URL = "https://ghproxy.net/https://raw.githubusercontent.com/wwww0205/reading-app/main/";
         
         let allBooks = [];
@@ -138,23 +132,21 @@
                 document.querySelectorAll('.nav-item')[0].classList.add('active');
                 document.getElementById("store-view").style.display = "block";
                 document.getElementById("shelf-view").style.display = "none";
-                document.getElementById("category-bar").style.display = "flex";
+                document.getElementById("header-title").innerText = "书城";
             } else {
                 document.querySelectorAll('.nav-item')[1].classList.add('active');
                 document.getElementById("store-view").style.display = "none";
                 document.getElementById("shelf-view").style.display = "block";
-                document.getElementById("category-bar").style.display = "none";
+                document.getElementById("header-title").innerText = "书架";
             }
         }
 
         async function loadStore() {
             try {
-                // 书城列表尝试用主通道
                 const res = await fetch(BASE_URL + "store.json");
                 allBooks = await res.json();
                 renderBooks();
             } catch (e) {
-                // 如果主通道挂了，尝试备用通道
                 try {
                     const res = await fetch(FALLBACK_URL + "store.json");
                     allBooks = await res.json();
@@ -176,7 +168,8 @@
                 const isAdded = shelfIds.includes(book.id);
                 const progress = getProgress(book.id);
                 const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
-                // 图片也做两手准备：默认走 jsDelivr，如果加载失败（onerror），自动切换到 ghproxy
+                
+                // 图片双通道
                 const imgUrl = BASE_URL + book.cover;
                 const imgFallback = FALLBACK_URL + book.cover;
                 
@@ -216,7 +209,6 @@
             document.getElementById("store-view").style.display = "none";
             document.getElementById("shelf-view").style.display = "none";
             document.getElementById("main-tabs").style.display = "none";
-            document.getElementById("category-bar").style.display = "none";
             document.getElementById("detail-view").style.display = "block";
             document.getElementById("header-title").innerText = "目录";
             document.getElementById("back-btn").style.visibility = "visible";
@@ -272,7 +264,6 @@
             contentDiv.innerText = "正在加载正文...";
             window.scrollTo(0, 0);
 
-            // 【核心修改】正文加载也做双重保险
             const chapterUrl = currentBook.folder + "/" + chap.file;
             try {
                 const res = await fetch(BASE_URL + chapterUrl);
@@ -303,7 +294,6 @@
             } else {
                 document.getElementById("detail-view").style.display = "none";
                 document.getElementById("main-tabs").style.display = "flex";
-                document.getElementById("header-title").innerText = "阅读器";
                 document.getElementById("back-btn").style.visibility = "hidden";
                 switchTab('store'); 
             }
