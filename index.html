@@ -12,8 +12,11 @@
         body.dark-mode { --theme-color: #2c2c2c; --bg-color: #1a1a1a; --text-color: #999; --card-bg: #2a2a2a; }
         body.sepia-mode { --bg-color: #f7e8c6; --text-color: #5b4636; --card-bg: #fdf5e6; }
 
-        .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; font-size: 18px; height: 50px;}
-        .header-btn { cursor: pointer; font-size: 14px; padding: 5px; font-weight: normal; width: 60px;}
+        .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; font-size: 18px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
+        
+        /* 增大返回按钮的点击区域 */
+        .header-btn { cursor: pointer; font-size: 15px; padding: 5px 10px; font-weight: normal; width: 70px; display: flex; align-items: center; z-index: 11;}
+        .header-btn:active { opacity: 0.7; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; height: 55px; background: var(--card-bg); border-top: 1px solid #ddd; display: flex; z-index: 30; }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; font-size: 12px; cursor: pointer; }
@@ -45,7 +48,7 @@
         
         .content-box { line-height: 1.8; font-size: 17px; white-space: pre-wrap; padding: 15px; padding-bottom: 100px; background: var(--bg-color); }
         
-        .toolbar { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--card-bg); border-top: 1px solid #ddd; display: none; justify-content: space-around; padding: 10px 0; z-index: 20; }
+        .toolbar { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--card-bg); border-top: 1px solid #ddd; display: none; justify-content: space-around; padding: 10px 0; z-index: 20; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);}
         .tool-btn { background: transparent; border: none; padding: 5px 10px; font-size: 14px; cursor: pointer; color: var(--text-color); }
         
         .page-nav { display: none; position: fixed; bottom: 60px; width: 100%; justify-content: space-between; padding: 0 15px; z-index: 15; pointer-events: none;}
@@ -57,9 +60,9 @@
 <body>
 
     <div class="header">
+        <!-- 修复了返回按钮，点击更灵敏 -->
         <span id="back-btn" class="header-btn" style="visibility: hidden;" onclick="goBack()">← 返回</span>
-        <span id="header-title" style="flex:1; text-align:center;">阅读器</span>
-        <span style="width: 60px;"></span>
+        <span id="header-title" style="flex:1; text-align:center; padding-right:70px;">阅读器</span>
     </div>
 
     <div id="store-view" class="view-section" style="display: block;">
@@ -113,7 +116,6 @@
         let themeIndex = 0; 
         let isPageMode = false;
 
-        // 【防偷懒机制】生成带时间戳的链接，强制浏览器去拿最新数据
         function getFreshUrl(base, path) {
             return base + path + "?t=" + new Date().getTime();
         }
@@ -158,7 +160,6 @@
 
         async function loadStore() {
             try {
-                // 使用带时间戳的 URL
                 const res = await fetch(getFreshUrl(BASE_URL, "store.json"));
                 allBooks = await res.json();
                 renderBooks();
@@ -185,7 +186,6 @@
                 const progress = getProgress(book.id);
                 const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
                 
-                // 图片也用防偷懒机制
                 const imgUrl = getFreshUrl(BASE_URL, book.cover);
                 const imgFallback = getFreshUrl(FALLBACK_URL, book.cover);
                 
@@ -226,6 +226,9 @@
             currentBook = allBooks.find(b => b.id === bookId);
             if (!currentBook) return;
 
+            // 【核心修改】每次打开书，向浏览器塞入一条历史记录
+            history.pushState({ page: 'catalog' }, '');
+
             document.getElementById("store-view").style.display = "none";
             document.getElementById("shelf-view").style.display = "none";
             document.getElementById("main-tabs").style.display = "none";
@@ -238,7 +241,6 @@
             list.innerHTML = "<div class='loading'>正在加载目录...</div>";
 
             try {
-                // 目录带防偷懒机制
                 const res = await fetch(getFreshUrl(BASE_URL, currentBook.folder + "/catalog.json"));
                 const catalog = await res.json();
                 renderChapters(catalog);
@@ -273,6 +275,9 @@
             const chap = currentCatalog[index];
             saveProgress(currentBook.id, index);
 
+            // 【核心修改】每次打开章节，向浏览器塞入一条历史记录
+            history.pushState({ page: 'reader' }, '');
+
             document.getElementById("detail-view").style.display = "none";
             document.getElementById("reader-view").style.display = "block";
             document.getElementById("header-title").innerText = "阅读";
@@ -287,7 +292,6 @@
 
             const chapterUrl = currentBook.folder + "/" + chap.file;
             try {
-                // 正文带防偷懒机制
                 const res = await fetch(getFreshUrl(BASE_URL, chapterUrl));
                 if (!res.ok) throw new Error("主通道失败");
                 const text = await res.text();
@@ -305,21 +309,29 @@
 
         function changeChapter(offset) { openChapter(currentChapterIndex + offset); }
 
+        // 统一的返回逻辑（按钮点击和侧滑都会走这里）
         function goBack() {
             if (document.getElementById("reader-view").style.display === "block") {
+                // 从正文返回目录
                 document.getElementById("reader-view").style.display = "none";
                 document.getElementById("detail-view").style.display = "block";
                 document.getElementById("header-title").innerText = "目录";
                 document.getElementById("toolbar").style.display = "none";
                 document.getElementById("page-nav").style.display = "none";
                 renderBooks(); 
-            } else {
+            } else if (document.getElementById("detail-view").style.display === "block") {
+                // 从目录返回书城/书架
                 document.getElementById("detail-view").style.display = "none";
                 document.getElementById("main-tabs").style.display = "flex";
                 document.getElementById("back-btn").style.visibility = "hidden";
                 switchTab('store'); 
             }
         }
+
+        // 【核心修改】监听手机自带的返回键/侧滑手势
+        window.addEventListener('popstate', function(e) {
+            goBack();
+        });
 
         function changeFontSize(step) {
             currentFontSize += step * 2;
