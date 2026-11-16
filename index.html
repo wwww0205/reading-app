@@ -2,157 +2,336 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>我的阅读器</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-        body { background-color: #f5f5f5; color: #333; }
-        .header { background-color: #2e8b57; color: white; padding: 15px; text-align: center; font-size: 18px; font-weight: bold; position: sticky; top: 0; z-index: 10; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; -webkit-tap-highlight-color: transparent;}
+        body { background-color: #f5f5f5; color: #333; transition: background 0.3s, color 0.3s; overflow-x: hidden;}
         
-        /* 书城列表页 */
-        #store-view { padding: 15px; }
-        .book-list { display: flex; flex-wrap: wrap; gap: 15px; }
-        .book-item { width: calc(50% - 7.5px); background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; }
-        .book-item img { width: 100%; height: 200px; object-fit: cover; background-color: #ddd; }
-        .book-info { padding: 10px; }
-        .book-title { font-size: 15px; font-weight: bold; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .book-author { font-size: 12px; color: #888; }
-        .loading { text-align: center; padding: 20px; color: #666; }
+        :root { --theme-color: #4CAF50; --bg-color: #f5f5f5; --text-color: #333; --card-bg: #fff; }
+        body.dark-mode { --theme-color: #2c2c2c; --bg-color: #1a1a1a; --text-color: #999; --card-bg: #2a2a2a; }
+        body.sepia-mode { --bg-color: #f7e8c6; --text-color: #5b4636; --card-bg: #fdf5e6; }
 
-        /* 目录页和正文页 */
-        #detail-view, #reader-view { display: none; padding: 15px; background: white; min-height: calc(100vh - 50px); }
-        .back-btn { display: inline-block; margin-bottom: 15px; padding: 5px 10px; background: #eee; border-radius: 4px; cursor: pointer; font-size: 14px; }
-        .chapter-list { list-style: none; }
-        .chapter-item { padding: 15px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 16px; }
-        .chapter-item:hover { color: #2e8b57; }
+        .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; font-size: 18px; }
+        .header-btn { cursor: pointer; font-size: 14px; padding: 5px; font-weight: normal; }
         
-        /* 正文阅读区 */
-        .content-box { line-height: 1.8; font-size: 17px; white-space: pre-wrap; }
+        .category-bar { display: flex; background: var(--card-bg); padding: 10px 0; border-bottom: 1px solid #ddd; justify-content: space-around; font-size: 15px; color: #666; }
+        .category-bar span { cursor: pointer; padding-bottom: 5px; }
+        .category-bar span.active { color: var(--theme-color); border-bottom: 2px solid var(--theme-color); font-weight: bold; }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; height: 55px; background: var(--card-bg); border-top: 1px solid #ddd; display: flex; z-index: 30; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; font-size: 12px; cursor: pointer; }
+        .nav-item.active { color: var(--theme-color); }
+        .nav-icon { font-size: 20px; margin-bottom: 2px; }
+        
+        .view-section { display: none; padding: 15px; padding-bottom: 70px; background: var(--bg-color); min-height: calc(100vh - 55px); }
+        .book-list { display: flex; flex-wrap: wrap; gap: 15px; }
+        .book-item { width: calc(33.33% - 10px); background: var(--card-bg); border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
+        .book-cover-box { cursor: pointer; position: relative;}
+        .book-item img { width: 100%; height: 150px; object-fit: cover; background-color: #ddd; display: block; }
+        .book-info { padding: 8px; cursor: pointer; }
+        .book-title { font-size: 14px; font-weight: bold; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); }
+        .book-author { font-size: 11px; color: #888; }
+        .read-badge { position: absolute; top: 5px; left: 5px; background: rgba(76, 175, 80, 0.9); color: white; font-size: 11px; padding: 2px 5px; border-radius: 3px; z-index: 2; }
+        
+        #detail-view, #reader-view { display: none; background: var(--bg-color); min-height: calc(100vh - 55px); padding-bottom: 70px; color: var(--text-color);}
+        .chapter-list { list-style: none; padding: 15px; }
+        .chapter-item { padding: 15px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 16px; }
+        .chapter-item:hover { color: var(--theme-color); }
+        
+        .content-box { line-height: 1.8; font-size: 17px; white-space: pre-wrap; padding: 15px; padding-bottom: 100px; background: var(--bg-color); }
+        
+        .toolbar { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--card-bg); border-top: 1px solid #ddd; display: none; justify-content: space-around; padding: 10px 0; z-index: 20; }
+        .tool-btn { background: transparent; border: none; padding: 5px 10px; font-size: 14px; cursor: pointer; color: var(--text-color); }
+        
+        .page-nav { display: none; position: fixed; bottom: 60px; width: 100%; justify-content: space-between; padding: 0 15px; z-index: 15; pointer-events: none;}
+        .page-btn { pointer-events: auto; background: rgba(0,0,0,0.5); color: white; border: none; padding: 10px 15px; border-radius: 20px; font-size: 14px; cursor: pointer;}
+        
+        .loading { text-align: center; padding: 20px; color: #666; width: 100%; }
     </style>
 </head>
 <body>
 
-    <div class="header" id="header-title">书城</div>
-
-    <!-- 书城列表页面 -->
-    <div id="store-view">
-        <div class="book-list" id="book-list">
-            <div class="loading">正在加载书城...</div>
-        </div>
+    <div class="header">
+        <span id="back-btn" class="header-btn" style="visibility: hidden;" onclick="goBack()">← 返回</span>
+        <span id="header-title">书城</span>
+        <span style="width: 40px;"></span>
     </div>
 
-    <!-- 目录页面 -->
+    <div class="category-bar" id="category-bar">
+        <span class="active">推荐</span>
+        <span>排行</span>
+        <span>完结</span>
+        <span>分类</span>
+    </div>
+
+    <div id="store-view" class="view-section" style="display: block;">
+        <div class="book-list" id="store-list"><div class="loading">正在加载书城...</div></div>
+    </div>
+
+    <div id="shelf-view" class="view-section">
+        <div class="book-list" id="shelf-list"><div class="loading">书架空空如也，快去书城加书吧~</div></div>
+    </div>
+
     <div id="detail-view">
-        <div class="back-btn" onclick="showStore()">← 返回书城</div>
-        <h2 id="detail-title" style="margin-bottom: 15px; font-size: 20px;"></h2>
+        <h2 id="detail-title" style="padding: 20px 15px 10px; font-size: 20px;"></h2>
         <ul class="chapter-list" id="chapter-list"></ul>
     </div>
 
-    <!-- 正文阅读页面 -->
     <div id="reader-view">
-        <div class="back-btn" onclick="backToCatalog()">← 返回目录</div>
-        <h2 id="chapter-title" style="margin-bottom: 20px; font-size: 20px; text-align: center;"></h2>
+        <h2 id="chapter-title" style="padding: 20px 15px 10px; font-size: 20px; text-align: center;"></h2>
         <div class="content-box" id="chapter-content">正在加载正文...</div>
+        
+        <div class="page-nav" id="page-nav">
+            <button class="page-btn" onclick="changeChapter(-1)">上一页</button>
+            <button class="page-btn" onclick="changeChapter(1)">下一页</button>
+        </div>
+    </div>
+
+    <div class="bottom-nav" id="main-tabs">
+        <div class="nav-item active" onclick="switchTab('store')">
+            <div class="nav-icon">🏠</div>书城
+        </div>
+        <div class="nav-item" onclick="switchTab('shelf')">
+            <div class="nav-icon">📚</div>书架
+        </div>
+    </div>
+
+    <div class="toolbar" id="toolbar">
+        <button class="tool-btn" onclick="changeTheme()">背景</button>
+        <button class="tool-btn" onclick="changeFontSize(-1)">A-</button>
+        <button class="tool-btn" onclick="changeFontSize(1)">A+</button>
+        <button class="tool-btn" onclick="togglePageMode()">翻页</button>
     </div>
 
     <script>
-        // 你的 GitHub 基础路径 (通过 jsDelivr 加速)
+        // 原有的 jsDelivr 加速
         const BASE_URL = "https://cdn.jsdelivr.net/gh/wwww0205/reading-app@main/";
+        // 【新增】备用通道 1：GitHub 镜像加速（如果 jsDelivr 卡住，换这个）
+        const FALLBACK_URL = "https://ghproxy.net/https://raw.githubusercontent.com/wwww0205/reading-app/main/";
         
+        let allBooks = [];
         let currentBook = null;
+        let currentCatalog = [];
+        let currentChapterIndex = -1;
+        let currentFontSize = 17;
+        let themeIndex = 0; 
+        let isPageMode = false;
 
-        // 1. 加载书城列表
+        function getShelf() { let shelf = localStorage.getItem("my_shelf"); return shelf ? JSON.parse(shelf) : []; }
+        function toggleShelf(bookId) {
+            let shelf = getShelf();
+            if (shelf.includes(bookId)) shelf = shelf.filter(id => id !== bookId);
+            else shelf.push(bookId);
+            localStorage.setItem("my_shelf", JSON.stringify(shelf));
+            renderBooks();
+        }
+
+        function getProgress(bookId) { return localStorage.getItem("progress_" + bookId); }
+        function saveProgress(bookId, chapterIndex) { localStorage.setItem("progress_" + bookId, chapterIndex); }
+
+        function switchTab(tab) {
+            document.getElementById('main-tabs').style.display = 'flex';
+            document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+            
+            if (tab === 'store') {
+                document.querySelectorAll('.nav-item')[0].classList.add('active');
+                document.getElementById("store-view").style.display = "block";
+                document.getElementById("shelf-view").style.display = "none";
+                document.getElementById("category-bar").style.display = "flex";
+            } else {
+                document.querySelectorAll('.nav-item')[1].classList.add('active');
+                document.getElementById("store-view").style.display = "none";
+                document.getElementById("shelf-view").style.display = "block";
+                document.getElementById("category-bar").style.display = "none";
+            }
+        }
+
         async function loadStore() {
             try {
+                // 书城列表尝试用主通道
                 const res = await fetch(BASE_URL + "store.json");
-                const books = await res.json();
-                const listDiv = document.getElementById("book-list");
-                listDiv.innerHTML = ""; // 清空加载提示
+                allBooks = await res.json();
+                renderBooks();
+            } catch (e) {
+                // 如果主通道挂了，尝试备用通道
+                try {
+                    const res = await fetch(FALLBACK_URL + "store.json");
+                    allBooks = await res.json();
+                    renderBooks();
+                } catch (err) {
+                    document.getElementById("store-list").innerHTML = `<div class="loading">加载失败，请检查网络。</div>`;
+                }
+            }
+        }
 
-                books.forEach(book => {
-                    const div = document.createElement("div");
-                    div.className = "book-item";
-                    div.onclick = () => openBook(book);
-                    
-                    // 图片同样使用 jsDelivr 加速
-                    const imgUrl = BASE_URL + book.cover;
-                    div.innerHTML = `
-                        <img src="${imgUrl}" alt="${book.title}" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22200%22%20height%3D%22200%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20200%22%20preserveAspectRatio%3D%22none%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23ddd%22%2F%3E%3Ctext%20x%3D%22100%22%20y%3D%22100%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%20font-size%3D%2216%22%3E%E6%9A%82%E6%97%A0%E5%B0%81%E9%9D%A2%3C%2Ftext%3E%3C%2Fsvg%3E'">
+        function renderBooks() {
+            const shelfIds = getShelf();
+            const storeList = document.getElementById("store-list");
+            const shelfList = document.getElementById("shelf-list");
+            storeList.innerHTML = ""; shelfList.innerHTML = "";
+            if (allBooks.length === 0) return;
+
+            allBooks.forEach(book => {
+                const isAdded = shelfIds.includes(book.id);
+                const progress = getProgress(book.id);
+                const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
+                // 图片也做两手准备：默认走 jsDelivr，如果加载失败（onerror），自动切换到 ghproxy
+                const imgUrl = BASE_URL + book.cover;
+                const imgFallback = FALLBACK_URL + book.cover;
+                
+                const cardHTML = `
+                    <div class="book-cover-box" onclick="openBook('${book.id}')">
+                        ${badge}
+                        <img src="${imgUrl}" onerror="this.src='${imgFallback}'; this.onerror=null;">
                         <div class="book-info">
                             <div class="book-title">${book.title}</div>
                             <div class="book-author">${book.author}</div>
                         </div>
-                    `;
-                    listDiv.appendChild(div);
-                });
-            } catch (e) {
-                document.getElementById("book-list").innerHTML = `<div class="loading">加载失败，请检查网络或GitHub配置。</div>`;
+                    </div>
+                `;
+
+                const storeItem = document.createElement("div");
+                storeItem.className = "book-item";
+                storeItem.innerHTML = cardHTML + `<button style="width:100%;padding:6px;border:none;background:var(--theme-color);color:white;font-size:12px;" onclick="toggleShelf('${book.id}')">${isAdded?'移出书架':'+ 书架'}</button>`;
+                storeList.appendChild(storeItem);
+
+                if (isAdded) {
+                    const shelfItem = document.createElement("div");
+                    shelfItem.className = "book-item";
+                    shelfItem.innerHTML = cardHTML;
+                    shelfList.appendChild(shelfItem);
+                }
+            });
+
+            if (shelfList.children.length === 0) {
+                shelfList.innerHTML = "<div class='loading'>书架空空如也，快去书城加书吧~</div>";
             }
         }
 
-        // 2. 打开某本书，加载目录
-        async function openBook(book) {
-            currentBook = book;
+        async function openBook(bookId) {
+            currentBook = allBooks.find(b => b.id === bookId);
+            if (!currentBook) return;
+
             document.getElementById("store-view").style.display = "none";
+            document.getElementById("shelf-view").style.display = "none";
+            document.getElementById("main-tabs").style.display = "none";
+            document.getElementById("category-bar").style.display = "none";
             document.getElementById("detail-view").style.display = "block";
             document.getElementById("header-title").innerText = "目录";
-            document.getElementById("detail-title").innerText = book.title;
+            document.getElementById("back-btn").style.visibility = "visible";
+            document.getElementById("detail-title").innerText = currentBook.title;
             
             const list = document.getElementById("chapter-list");
             list.innerHTML = "<div class='loading'>正在加载目录...</div>";
 
             try {
-                // 读取书的 catalog.json
-                const res = await fetch(BASE_URL + book.folder + "/catalog.json");
+                const res = await fetch(BASE_URL + currentBook.folder + "/catalog.json");
                 const catalog = await res.json();
-                list.innerHTML = "";
-
-                catalog.chapters.forEach(chap => {
-                    const li = document.createElement("li");
-                    li.className = "chapter-item";
-                    li.innerText = chap.title;
-                    li.onclick = () => openChapter(book.folder, chap);
-                    list.appendChild(li);
-                });
+                renderChapters(catalog);
             } catch (e) {
-                list.innerHTML = "<div class='loading'>目录加载失败。</div>";
+                try {
+                    const res = await fetch(FALLBACK_URL + currentBook.folder + "/catalog.json");
+                    const catalog = await res.json();
+                    renderChapters(catalog);
+                } catch (err) {
+                    list.innerHTML = "<div class='loading'>目录加载失败。</div>";
+                }
             }
         }
 
-        // 3. 打开某一章，加载正文
-        async function openChapter(folder, chap) {
+        function renderChapters(catalog) {
+            const list = document.getElementById("chapter-list");
+            currentCatalog = catalog.chapters;
+            list.innerHTML = "";
+            currentCatalog.forEach((chap, index) => {
+                const li = document.createElement("li");
+                li.className = "chapter-item";
+                li.innerText = chap.title;
+                if (getProgress(currentBook.id) == index) { li.style.color = "var(--theme-color)"; li.innerText += " (上次读到)"; }
+                li.onclick = () => openChapter(index);
+                list.appendChild(li);
+            });
+        }
+
+        async function openChapter(index) {
+            if (index < 0 || index >= currentCatalog.length) return;
+            currentChapterIndex = index;
+            const chap = currentCatalog[index];
+            saveProgress(currentBook.id, index);
+
             document.getElementById("detail-view").style.display = "none";
             document.getElementById("reader-view").style.display = "block";
             document.getElementById("header-title").innerText = "阅读";
             document.getElementById("chapter-title").innerText = chap.title;
+            document.getElementById("toolbar").style.display = "flex";
             
+            if (isPageMode) document.getElementById("page-nav").style.display = "flex";
+
             const contentDiv = document.getElementById("chapter-content");
             contentDiv.innerText = "正在加载正文...";
+            window.scrollTo(0, 0);
 
+            // 【核心修改】正文加载也做双重保险
+            const chapterUrl = currentBook.folder + "/" + chap.file;
             try {
-                // 读取 txt 文件
-                const res = await fetch(BASE_URL + folder + "/" + chap.file);
+                const res = await fetch(BASE_URL + chapterUrl);
+                if (!res.ok) throw new Error("主通道失败");
                 const text = await res.text();
                 contentDiv.innerText = text;
             } catch (e) {
-                contentDiv.innerText = "正文加载失败，请检查文件是否存在。";
+                try {
+                    const res = await fetch(FALLBACK_URL + chapterUrl);
+                    const text = await res.text();
+                    contentDiv.innerText = text;
+                } catch (err) {
+                    contentDiv.innerText = "正文加载失败，可能是网络问题或文件不存在。";
+                }
             }
         }
 
-        // 导航逻辑
-        function showStore() {
-            document.getElementById("detail-view").style.display = "none";
-            document.getElementById("store-view").style.display = "block";
-            document.getElementById("header-title").innerText = "书城";
+        function changeChapter(offset) { openChapter(currentChapterIndex + offset); }
+
+        function goBack() {
+            if (document.getElementById("reader-view").style.display === "block") {
+                document.getElementById("reader-view").style.display = "none";
+                document.getElementById("detail-view").style.display = "block";
+                document.getElementById("header-title").innerText = "目录";
+                document.getElementById("toolbar").style.display = "none";
+                document.getElementById("page-nav").style.display = "none";
+                renderBooks(); 
+            } else {
+                document.getElementById("detail-view").style.display = "none";
+                document.getElementById("main-tabs").style.display = "flex";
+                document.getElementById("header-title").innerText = "阅读器";
+                document.getElementById("back-btn").style.visibility = "hidden";
+                switchTab('store'); 
+            }
         }
 
-        function backToCatalog() {
-            document.getElementById("reader-view").style.display = "none";
-            document.getElementById("detail-view").style.display = "block";
-            document.getElementById("header-title").innerText = "目录";
+        function changeFontSize(step) {
+            currentFontSize += step * 2;
+            if (currentFontSize < 12) currentFontSize = 12;
+            if (currentFontSize > 30) currentFontSize = 30;
+            document.getElementById("chapter-content").style.fontSize = currentFontSize + "px";
         }
 
-        // 页面加载完成后，执行获取书城列表
+        function changeTheme() {
+            themeIndex = (themeIndex + 1) % 3;
+            document.body.classList.remove('dark-mode', 'sepia-mode');
+            if (themeIndex === 1) document.body.classList.add('dark-mode');
+            if (themeIndex === 2) document.body.classList.add('sepia-mode');
+        }
+
+        function togglePageMode() {
+            isPageMode = !isPageMode;
+            if (isPageMode) {
+                document.getElementById("page-nav").style.display = "flex";
+            } else {
+                document.getElementById("page-nav").style.display = "none";
+            }
+        }
+
         window.onload = loadStore;
     </script>
 </body>
