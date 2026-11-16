@@ -1,0 +1,9 @@
+[
+  {
+    "id": "book_01",
+    "title": "有翡",
+    "author": "p大",
+    "cover": "covers/book_01.jpg",
+    "folder": "books/book_01"
+  }
+]
