@@ -1,0 +1,9 @@
+{
+  "book_id": "book_01",
+  "chapters": [
+    {
+      "title": "第一章 挨打",
+      "file": "ch1.txt"
+    }
+  ]
+}
