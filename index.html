@@ -8,7 +8,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; -webkit-tap-highlight-color: transparent;}
         body { background-color: #f5f5f5; color: #333; transition: background 0.3s, color 0.3s; overflow-x: hidden;}
         
-        /* 主题变量 */
         :root { --theme-color: #4CAF50; --bg-color: #f5f5f5; --text-color: #333; --card-bg: #fff; }
         body.theme-dark { --theme-color: #2c2c2c; --bg-color: #1a1a1a; --text-color: #999; --card-bg: #2a2a2a; }
         body.theme-sepia { --theme-color: #8b7355; --bg-color: #f7e8c6; --text-color: #5b4636; --card-bg: #fdf5e6; }
@@ -30,14 +29,15 @@
         .book-list { display: flex; flex-wrap: wrap; gap: 15px; }
         
         .book-item { width: calc(33.33% - 10px); background: var(--card-bg); border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
-        .book-cover-box { cursor: pointer; position: relative;}
+        /* 强制让封面区域可点击 */
+        .book-cover-box { cursor: pointer; position: relative; z-index: 10; }
         .book-item img { width: 100%; height: 150px; object-fit: cover; background-color: #ddd; display: block; }
         .book-info { padding: 8px; cursor: pointer; }
         .book-title { font-size: 14px; font-weight: bold; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); }
         .book-author { font-size: 11px; color: #888; }
         .read-badge { position: absolute; top: 5px; left: 5px; background: rgba(76, 175, 80, 0.9); color: white; font-size: 11px; padding: 2px 5px; border-radius: 3px; z-index: 2; }
         
-        .action-btn { width: 100%; padding: 8px; border: none; font-size: 12px; cursor: pointer; font-weight: bold;}
+        .action-btn { width: 100%; padding: 8px; border: none; font-size: 12px; cursor: pointer; font-weight: bold; position: relative; z-index: 10;}
         .btn-add { background: var(--theme-color); color: white; }
         .btn-added { background: #e0e0e0; color: #888; cursor: default; }
         body.theme-dark .btn-added { background: #333; color: #666; }
@@ -52,7 +52,6 @@
         .content-box { line-height: 1.8; font-size: 17px; white-space: pre-wrap; padding: 15px; padding-bottom: 100px; background: var(--bg-color); transition: transform 0.3s ease; }
         .slide-in { transform: translateX(100%); opacity: 0; }
 
-        /* 底部设置面板 */
         .settings-drawer { position: fixed; bottom: -100%; left: 0; width: 100%; background: var(--card-bg); border-top-left-radius: 15px; border-top-right-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 40; transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; padding-bottom: 20px;}
         .settings-drawer.open { bottom: 0; }
         .drawer-header { display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.2); font-weight: bold;}
@@ -112,7 +111,6 @@
         </div>
     </div>
 
-    <!-- 底部设置面板 -->
     <div class="settings-drawer" id="settings-drawer">
         <div class="drawer-header">
             <span>阅读设置</span>
@@ -176,35 +174,31 @@
         function getFreshUrl(base, path) { return base + path + "?t=" + new Date().getTime(); }
         function getShelf() { let shelf = localStorage.getItem("my_shelf"); return shelf ? JSON.parse(shelf) : []; }
         
-        // === 核心优化：只改变按钮，不重建整个列表 ===
         function addToShelf(bookId) {
             let s = getShelf(); 
             if(!s.includes(bookId)){ 
                 s.push(bookId); 
                 localStorage.setItem("my_shelf", JSON.stringify(s)); 
-                // 不重新加载，只改当前书城里的按钮状态
                 document.getElementById("store-btn-" + bookId).className = "action-btn btn-added";
                 document.getElementById("store-btn-" + bookId).innerText = "已在书架";
-                renderShelfOnly(); // 只更新书架标签的内容
+                renderShelfOnly(); 
             } 
         }
 
         function removeFromShelf(bookId) {
             let s = getShelf().filter(i => i !== bookId); 
             localStorage.setItem("my_shelf", JSON.stringify(s)); 
-            // 只改当前书架里的按钮状态，不用重新加载图片
             document.getElementById("shelf-btn-" + bookId).className = "action-btn btn-add";
             document.getElementById("shelf-btn-" + bookId).innerText = "+ 加入书架";
             document.getElementById("shelf-btn-" + bookId).onclick = function() { addToShelf(bookId); };
             
-            // 同时把书城里的按钮改回“加入书架”
             let storeBtn = document.getElementById("store-btn-" + bookId);
             if(storeBtn) {
                 storeBtn.className = "action-btn btn-add";
                 storeBtn.innerText = "+ 加入书架";
                 storeBtn.onclick = function() { addToShelf(bookId); };
             }
-            renderShelfOnly(); // 只更新书架标签的内容
+            renderShelfOnly(); 
         }
 
         function getProgress(id) { return localStorage.getItem("progress_" + id); }
@@ -236,11 +230,12 @@
                     const res = await fetch(getFreshUrl(FALLBACK_URL, "store.json"));
                     allBooks = await res.json();
                     renderBooks();
-                } catch (err) { document.getElementById("store-list").innerHTML = `<div class="loading">加载失败。</div>`; }
+                } catch (err) { 
+                    document.getElementById("store-list").innerHTML = `<div class="loading">加载失败，请检查网络。</div>`; 
+                }
             }
         }
 
-        // 渲染书城
         function renderBooks() {
             const shelfIds = getShelf();
             const storeList = document.getElementById("store-list");
@@ -277,7 +272,6 @@
             renderShelfOnly();
         }
 
-        // 单独渲染书架（因为书架里的内容和书城是不同的DOM）
         function renderShelfOnly() {
             const shelfIds = getShelf();
             const shelfList = document.getElementById("shelf-list");
@@ -309,12 +303,13 @@
             if (shelfList.children.length === 0) shelfList.innerHTML = "<div class='loading'>书架空空如也~</div>";
         }
 
+        // 核心修改：加了网络超时的提示
         async function openBook(bookId) {
             currentBook = allBooks.find(b => b.id === bookId);
             if (!currentBook) return;
             stopSpeech();
-            history.pushState({ page: 'catalog' }, '');
             
+            // 在点击后马上跳转界面，让用户知道点成功了
             document.getElementById("store-view").style.display = "none";
             document.getElementById("shelf-view").style.display = "none";
             document.getElementById("main-tabs").style.display = "none";
@@ -324,9 +319,13 @@
             document.getElementById("detail-title").innerText = currentBook.title;
             
             const list = document.getElementById("chapter-list");
-            list.innerHTML = "<div class='loading'>正在加载目录...</div>";
+            list.innerHTML = "<div class='loading'>正在加载目录...（如果一直卡住，可能是网络连不上 GitHub，请稍后重试）</div>";
+            
+            history.pushState({ page: 'catalog' }, '');
+
             try {
                 const res = await fetch(getFreshUrl(BASE_URL, currentBook.folder + "/catalog.json"));
+                if (!res.ok) throw new Error("加载失败");
                 const catalog = await res.json();
                 renderChapters(catalog);
             } catch (e) {
@@ -334,7 +333,9 @@
                     const res = await fetch(getFreshUrl(FALLBACK_URL, currentBook.folder + "/catalog.json"));
                     const catalog = await res.json();
                     renderChapters(catalog);
-                } catch (err) { list.innerHTML = "<div class='loading'>目录加载失败。</div>"; }
+                } catch (err) { 
+                    list.innerHTML = "<div class='loading'>目录加载失败。<br>请检查网络，或者稍后再试。</div>"; 
+                }
             }
         }
 
