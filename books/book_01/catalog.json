@@ -4,24 +4,15 @@
     {
       "title": "第一章 挨打",
       "file": "ch1.txt"
-    }
-  ]
-}
-{
-  "book_id": "book_01",
-  "chapters": [
+    },
     {
-      "title": "第二章 李晟 ",
+      "title": "第二章 你的标题",
       "file": "ch2.txt"
-    }
-  ]
-}
-{
-  "book_id": "book_01",
-  "chapters": [
+    },
     {
-      "title": "第三章 打赌  ",
+      "title": "第三章 你的标题",
       "file": "ch3.txt"
     }
   ]
 }
+
