@@ -49,24 +49,18 @@
         .chapter-item { padding: 15px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 16px; }
         .chapter-item:hover { color: var(--theme-color); }
         
-        /* 阅读区 */
         .content-box { line-height: 1.8; font-size: 17px; white-space: pre-wrap; padding: 15px; padding-bottom: 100px; background: var(--bg-color); transition: transform 0.3s ease; }
-        .slide-out { transform: translateX(-100%); opacity: 0; }
         .slide-in { transform: translateX(100%); opacity: 0; }
 
-        /* === 沉浸式底部设置抽屉 === */
+        /* 底部设置面板 */
         .settings-drawer { position: fixed; bottom: -100%; left: 0; width: 100%; background: var(--card-bg); border-top-left-radius: 15px; border-top-right-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 40; transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; padding-bottom: 20px;}
         .settings-drawer.open { bottom: 0; }
-        
         .drawer-header { display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.2); font-weight: bold;}
         .close-drawer { cursor: pointer; font-size: 20px; color: #888; }
-        
         .drawer-section { padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.1); }
         .section-title { font-size: 13px; color: #888; margin-bottom: 10px; }
         .btn-group { display: flex; gap: 10px; flex-wrap: wrap;}
-        
-        .tool-btn { flex: 1; padding: 10px; background: var(--bg-color); border: 1px solid rgba(128,128,128,0.2); border-radius: 8px; font-size: 14px; cursor: pointer; color: var(--text-color); text-align: center; transition: background 0.2s; min-width: 60px;}
-        .tool-btn:active { opacity: 0.7; }
+        .tool-btn { flex: 1; padding: 10px; background: var(--bg-color); border: 1px solid rgba(128,128,128,0.2); border-radius: 8px; font-size: 14px; cursor: pointer; color: var(--text-color); text-align: center; min-width: 60px;}
         
         .page-nav { display: none; position: fixed; bottom: 20%; width: 100%; justify-content: space-between; padding: 0 15px; z-index: 15; pointer-events: none;}
         .page-btn { pointer-events: auto; background: rgba(0,0,0,0.3); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px);}
@@ -118,14 +112,13 @@
         </div>
     </div>
 
-    <!-- === 底部设置面板 === -->
+    <!-- 底部设置面板 -->
     <div class="settings-drawer" id="settings-drawer">
         <div class="drawer-header">
             <span>阅读设置</span>
             <span class="close-drawer" onclick="toggleSettingsDrawer()">×</span>
         </div>
         
-        <!-- 听书模式 -->
         <div class="drawer-section">
             <div class="section-title">语音朗读</div>
             <div class="btn-group">
@@ -133,7 +126,6 @@
             </div>
         </div>
 
-        <!-- 背景颜色 -->
         <div class="drawer-section">
             <div class="section-title">背景与主题</div>
             <div class="btn-group">
@@ -144,7 +136,6 @@
             </div>
         </div>
 
-        <!-- 字体大小 -->
         <div class="drawer-section">
             <div class="section-title">字体大小</div>
             <div class="btn-group">
@@ -153,7 +144,6 @@
             </div>
         </div>
 
-        <!-- 翻页方式 -->
         <div class="drawer-section">
             <div class="section-title">翻页方式</div>
             <div class="btn-group">
@@ -176,7 +166,6 @@
         let currentTheme = localStorage.getItem("read_theme") || '';
         let currentPageMode = localStorage.getItem("read_page") || 'scroll'; 
 
-        // 听书状态
         let isSpeaking = false;
         let synth = window.speechSynthesis;
         let currentUtterance = null;
@@ -186,8 +175,38 @@
 
         function getFreshUrl(base, path) { return base + path + "?t=" + new Date().getTime(); }
         function getShelf() { let shelf = localStorage.getItem("my_shelf"); return shelf ? JSON.parse(shelf) : []; }
-        function addToShelf(id) { let s = getShelf(); if(!s.includes(id)){ s.push(id); localStorage.setItem("my_shelf", JSON.stringify(s)); renderBooks(); } }
-        function removeFromShelf(id) { let s = getShelf().filter(i => i !== id); localStorage.setItem("my_shelf", JSON.stringify(s)); renderBooks(); }
+        
+        // === 核心优化：只改变按钮，不重建整个列表 ===
+        function addToShelf(bookId) {
+            let s = getShelf(); 
+            if(!s.includes(bookId)){ 
+                s.push(bookId); 
+                localStorage.setItem("my_shelf", JSON.stringify(s)); 
+                // 不重新加载，只改当前书城里的按钮状态
+                document.getElementById("store-btn-" + bookId).className = "action-btn btn-added";
+                document.getElementById("store-btn-" + bookId).innerText = "已在书架";
+                renderShelfOnly(); // 只更新书架标签的内容
+            } 
+        }
+
+        function removeFromShelf(bookId) {
+            let s = getShelf().filter(i => i !== bookId); 
+            localStorage.setItem("my_shelf", JSON.stringify(s)); 
+            // 只改当前书架里的按钮状态，不用重新加载图片
+            document.getElementById("shelf-btn-" + bookId).className = "action-btn btn-add";
+            document.getElementById("shelf-btn-" + bookId).innerText = "+ 加入书架";
+            document.getElementById("shelf-btn-" + bookId).onclick = function() { addToShelf(bookId); };
+            
+            // 同时把书城里的按钮改回“加入书架”
+            let storeBtn = document.getElementById("store-btn-" + bookId);
+            if(storeBtn) {
+                storeBtn.className = "action-btn btn-add";
+                storeBtn.innerText = "+ 加入书架";
+                storeBtn.onclick = function() { addToShelf(bookId); };
+            }
+            renderShelfOnly(); // 只更新书架标签的内容
+        }
+
         function getProgress(id) { return localStorage.getItem("progress_" + id); }
         function saveProgress(id, index) { localStorage.setItem("progress_" + id, index); }
 
@@ -221,11 +240,11 @@
             }
         }
 
+        // 渲染书城
         function renderBooks() {
             const shelfIds = getShelf();
             const storeList = document.getElementById("store-list");
-            const shelfList = document.getElementById("shelf-list");
-            storeList.innerHTML = ""; shelfList.innerHTML = "";
+            storeList.innerHTML = "";
             if (allBooks.length === 0) return;
 
             allBooks.forEach(book => {
@@ -235,7 +254,14 @@
                 const imgUrl = getFreshUrl(BASE_URL, book.cover);
                 const imgFallback = getFreshUrl(FALLBACK_URL, book.cover);
                 
-                const contentHTML = `
+                const storeItem = document.createElement("div");
+                storeItem.className = "book-item";
+                
+                let btnHTML = isAdded 
+                    ? `<button class="action-btn btn-added" id="store-btn-${book.id}">已在书架</button>` 
+                    : `<button class="action-btn btn-add" id="store-btn-${book.id}" onclick="addToShelf('${book.id}')">+ 加入书架</button>`;
+
+                storeItem.innerHTML = `
                     <div class="book-cover-box" onclick="openBook('${book.id}')">
                         ${badge}
                         <img src="${imgUrl}" onerror="this.src='${imgFallback}'; this.onerror=null;">
@@ -244,17 +270,39 @@
                             <div class="book-author">${book.author}</div>
                         </div>
                     </div>
+                    ${btnHTML}
                 `;
-                const storeItem = document.createElement("div");
-                storeItem.className = "book-item";
-                if (isAdded) { storeItem.innerHTML = contentHTML + `<button class="action-btn btn-added">已在书架</button>`; } 
-                else { storeItem.innerHTML = contentHTML + `<button class="action-btn btn-add" onclick="addToShelf('${book.id}')">+ 加入书架</button>`; }
                 storeList.appendChild(storeItem);
+            });
+            renderShelfOnly();
+        }
 
-                if (isAdded) {
+        // 单独渲染书架（因为书架里的内容和书城是不同的DOM）
+        function renderShelfOnly() {
+            const shelfIds = getShelf();
+            const shelfList = document.getElementById("shelf-list");
+            shelfList.innerHTML = "";
+            
+            allBooks.forEach(book => {
+                if (shelfIds.includes(book.id)) {
+                    const progress = getProgress(book.id);
+                    const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
+                    const imgUrl = getFreshUrl(BASE_URL, book.cover);
+                    const imgFallback = getFreshUrl(FALLBACK_URL, book.cover);
+                    
                     const shelfItem = document.createElement("div");
                     shelfItem.className = "book-item";
-                    shelfItem.innerHTML = contentHTML + `<button class="action-btn btn-remove" onclick="removeFromShelf('${book.id}')">移出书架</button>`;
+                    shelfItem.innerHTML = `
+                        <div class="book-cover-box" onclick="openBook('${book.id}')">
+                            ${badge}
+                            <img src="${imgUrl}" onerror="this.src='${imgFallback}'; this.onerror=null;">
+                            <div class="book-info">
+                                <div class="book-title">${book.title}</div>
+                                <div class="book-author">${book.author}</div>
+                            </div>
+                        </div>
+                        <button class="action-btn btn-remove" id="shelf-btn-${book.id}" onclick="removeFromShelf('${book.id}')">移出书架</button>
+                    `;
                     shelfList.appendChild(shelfItem);
                 }
             });
@@ -264,8 +312,7 @@
         async function openBook(bookId) {
             currentBook = allBooks.find(b => b.id === bookId);
             if (!currentBook) return;
-            
-            stopSpeech(); // 打开新书先停掉上一本的语音
+            stopSpeech();
             history.pushState({ page: 'catalog' }, '');
             
             document.getElementById("store-view").style.display = "none";
@@ -310,8 +357,7 @@
             currentChapterIndex = index;
             const chap = currentCatalog[index];
             saveProgress(currentBook.id, index);
-            
-            stopSpeech(); // 切章自动停止上一章语音
+            stopSpeech();
 
             if(!isSlide) history.pushState({ page: 'reader' }, '');
 
@@ -368,14 +414,13 @@
         function goBack() {
             document.getElementById("settings-drawer").classList.remove("open");
             document.getElementById("main-header").classList.remove("hidden");
-            stopSpeech(); // 退出阅读页自动停止语音
+            stopSpeech();
 
             if (document.getElementById("reader-view").style.display === "block") {
                 document.getElementById("reader-view").style.display = "none";
                 document.getElementById("detail-view").style.display = "block";
                 document.getElementById("header-title").innerText = "目录";
                 document.getElementById("page-nav").style.display = "none";
-                renderBooks(); 
             } else if (document.getElementById("detail-view").style.display === "block") {
                 document.getElementById("detail-view").style.display = "none";
                 document.getElementById("main-tabs").style.display = "flex";
@@ -425,26 +470,21 @@
             toggleSettingsDrawer();
         }
 
-        // === 听书核心功能 ===
         function toggleSpeech() {
             const textToRead = document.getElementById("chapter-content").innerText;
             const btn = document.getElementById("speech-btn");
             const indicator = document.getElementById("audio-indicator");
 
-            // 如果正在读，就暂停/停止
             if (isSpeaking) {
                 stopSpeech();
                 return;
             }
 
-            // 如果没在读，开始读
             if (textToRead && textToRead !== "正在加载正文..." && textToRead !== "正文加载失败，可能是网络问题或文件不存在。") {
-                // 创建语音对象（中文）
                 currentUtterance = new SpeechSynthesisUtterance(textToRead);
                 currentUtterance.lang = 'zh-CN';
-                currentUtterance.rate = 1.0; // 语速：1是正常
+                currentUtterance.rate = 1.0;
 
-                // 监听结束事件
                 currentUtterance.onend = function() {
                     isSpeaking = false;
                     btn.innerText = "▶ 开始听书";
@@ -464,7 +504,7 @@
 
         function stopSpeech() {
             if (synth.speaking) {
-                synth.cancel(); // 停止所有语音
+                synth.cancel();
             }
             isSpeaking = false;
             const btn = document.getElementById("speech-btn");
