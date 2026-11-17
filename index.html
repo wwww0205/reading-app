@@ -6,30 +6,27 @@
     <title>我的阅读器</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; -webkit-tap-highlight-color: transparent;}
-        body { background-color: #f5f5f5; color: #333; transition: background 0.3s, color 0.3s; overflow-x: hidden;}
+        body { background-color: #f5f5f5; color: #333; transition: background 0.3s, color 0.3s; overflow: hidden;}
         
         :root { --theme-color: #4CAF50; --bg-color: #f5f5f5; --text-color: #333; --card-bg: #fff; }
         body.theme-dark { --theme-color: #2c2c2c; --bg-color: #1a1a1a; --text-color: #999; --card-bg: #2a2a2a; }
         body.theme-sepia { --theme-color: #8b7355; --bg-color: #f7e8c6; --text-color: #5b4636; --card-bg: #fdf5e6; }
         body.theme-green { --theme-color: #3b6b52; --bg-color: #cce8cf; --text-color: #2b4b36; --card-bg: #e0f2e1; }
 
-        .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; font-size: 18px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.3s;}
+        .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: fixed; top: 0; left: 0; width: 100%; z-index: 20; display: flex; justify-content: space-between; align-items: center; font-size: 18px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.3s;}
         .header.hidden { transform: translateY(-100%); }
         .header-btn { cursor: pointer; font-size: 15px; padding: 5px 10px; font-weight: normal; width: 70px; display: flex; align-items: center; z-index: 11;}
-        .header-btn:active { opacity: 0.7; }
         
         .audio-status { font-size: 12px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; display: none; margin-left: 5px;}
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; height: 55px; background: var(--card-bg); border-top: 1px solid #ddd; display: flex; z-index: 30; }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; font-size: 12px; cursor: pointer; }
         .nav-item.active { color: var(--theme-color); }
-        .nav-icon { font-size: 20px; margin-bottom: 2px; }
         
-        .view-section { display: none; padding: 15px; padding-bottom: 70px; background: var(--bg-color); min-height: calc(100vh - 50px); }
+        .view-section { display: none; padding: 65px 15px 70px; background: var(--bg-color); min-height: 100vh; overflow-y: auto;}
         .book-list { display: flex; flex-wrap: wrap; gap: 15px; }
         
         .book-item { width: calc(33.33% - 10px); background: var(--card-bg); border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
-        /* 强制让封面区域可点击 */
         .book-cover-box { cursor: pointer; position: relative; z-index: 10; }
         .book-item img { width: 100%; height: 150px; object-fit: cover; background-color: #ddd; display: block; }
         .book-info { padding: 8px; cursor: pointer; }
@@ -37,34 +34,56 @@
         .book-author { font-size: 11px; color: #888; }
         .read-badge { position: absolute; top: 5px; left: 5px; background: rgba(76, 175, 80, 0.9); color: white; font-size: 11px; padding: 2px 5px; border-radius: 3px; z-index: 2; }
         
-        .action-btn { width: 100%; padding: 8px; border: none; font-size: 12px; cursor: pointer; font-weight: bold; position: relative; z-index: 10;}
+        .app-btn { width: 100%; padding: 8px; border: none; font-size: 12px; cursor: pointer; font-weight: bold; position: relative; z-index: 10;}
         .btn-add { background: var(--theme-color); color: white; }
         .btn-added { background: #e0e0e0; color: #888; cursor: default; }
-        body.theme-dark .btn-added { background: #333; color: #666; }
         .btn-remove { background: #ffebee; color: #d32f2f; }
-        body.theme-dark .btn-remove { background: #442222; color: #ff8888; }
 
-        #detail-view, #reader-view { display: none; background: var(--bg-color); min-height: 100vh; color: var(--text-color);}
+        #detail-view { display: none; background: var(--bg-color); min-height: 100vh; color: var(--text-color); padding-top: 50px;}
         .chapter-list { list-style: none; padding: 15px; padding-bottom: 70px;}
         .chapter-item { padding: 15px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 16px; }
-        .chapter-item:hover { color: var(--theme-color); }
         
-        .content-box { line-height: 1.8; font-size: 17px; white-space: pre-wrap; padding: 15px; padding-bottom: 100px; background: var(--bg-color); transition: transform 0.3s ease; }
-        .slide-in { transform: translateX(100%); opacity: 0; }
+        /* 阅读区 */
+        #reader-view { display: none; background: var(--bg-color); min-height: 100vh; color: var(--text-color); overflow: hidden;}
+        
+        .content-box { 
+            line-height: 1.8; font-size: 17px; white-space: pre-wrap; 
+            padding: 60px 15px 80px; 
+            height: 100vh; overflow-y: auto;
+        }
+        
+        .paged-mode .content-box {
+            height: calc(100vh - 100px); /* 减去顶部和底部的高度 */
+            margin-top: 50px;
+            overflow: hidden; 
+            padding: 15px;
+            position: relative;
+        }
 
-        .settings-drawer { position: fixed; bottom: -100%; left: 0; width: 100%; background: var(--card-bg); border-top-left-radius: 15px; border-top-right-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 40; transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; padding-bottom: 20px;}
+        .page-anim-right { animation: slideRight 0.2s ease-out; }
+        .page-anim-left { animation: slideLeft 0.2s ease-out; }
+        @keyframes slideRight { from { transform: translateX(30%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideLeft { from { transform: translateX(-30%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* 底部状态栏 (页码 + 切章) */
+        .footer-bar { position: fixed; bottom: 0; left: 0; width: 100%; height: 50px; display: none; justify-content: space-between; align-items: center; padding: 0 15px; font-size: 14px; color: var(--text-color); background: var(--card-bg); z-index: 10; border-top: 1px solid rgba(128,128,128,0.2); transition: bottom 0.3s; }
+        .footer-btn { background: transparent; border: 1px solid rgba(128,128,128,0.3); padding: 5px 15px; border-radius: 15px; font-size: 13px; cursor: pointer; color: var(--text-color);}
+        .footer-center { font-size: 12px; color: #888; display: flex; flex-direction: column; align-items: center;}
+
+        /* 底部设置面板 */
+        .settings-drawer { position: fixed; bottom: -100%; left: 0; width: 100%; background: var(--card-bg); border-top-left-radius: 15px; border-top-right-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 40; transition: bottom 0.3s; display: flex; flex-direction: column; padding-bottom: 20px;}
         .settings-drawer.open { bottom: 0; }
         .drawer-header { display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.2); font-weight: bold;}
-        .close-drawer { cursor: pointer; font-size: 20px; color: #888; }
         .drawer-section { padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.1); }
         .section-title { font-size: 13px; color: #888; margin-bottom: 10px; }
         .btn-group { display: flex; gap: 10px; flex-wrap: wrap;}
         .tool-btn { flex: 1; padding: 10px; background: var(--bg-color); border: 1px solid rgba(128,128,128,0.2); border-radius: 8px; font-size: 14px; cursor: pointer; color: var(--text-color); text-align: center; min-width: 60px;}
         
-        .page-nav { display: none; position: fixed; bottom: 20%; width: 100%; justify-content: space-between; padding: 0 15px; z-index: 15; pointer-events: none;}
-        .page-btn { pointer-events: auto; background: rgba(0,0,0,0.3); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px);}
+        .touch-zone { position: absolute; top: 50px; bottom: 0; width: 33.33%; z-index: 15; }
+        .zone-left { left: 0; }
+        .zone-center { left: 33.33%; }
+        .zone-right { right: 0; }
         
-        .touch-mask { position: absolute; top: 50px; bottom: 0; left: 0; width: 100%; z-index: 5; }
         .loading { text-align: center; padding: 20px; color: #666; width: 100%; }
     </style>
 </head>
@@ -91,24 +110,27 @@
     </div>
 
     <div id="reader-view" style="position: relative;">
-        <h2 id="chapter-title" style="padding: 20px 15px 10px; font-size: 20px; text-align: center;"></h2>
+        <h2 id="chapter-title" style="position: absolute; top: 50px; width: 100%; text-align: center; z-index: 5; font-size: 16px; color: #888; pointer-events: none;"></h2>
+        
         <div class="content-box" id="chapter-content">正在加载正文...</div>
         
-        <div class="touch-mask" onclick="toggleSettingsDrawer()"></div>
-
-        <div class="page-nav" id="page-nav">
-            <button class="page-btn" onclick="changeChapter(-1)">‹</button>
-            <button class="page-btn" onclick="changeChapter(1)">›</button>
+        <div class="touch-zone zone-left" onclick="handleScreenClick('left')"></div>
+        <div class="touch-zone zone-center" onclick="handleScreenClick('center')"></div>
+        <div class="touch-zone zone-right" onclick="handleScreenClick('right')"></div>
+        
+        <!-- 底部状态栏（平时隐藏，呼出菜单时显示，包含上一章/下一章） -->
+        <div class="footer-bar" id="footer-bar">
+            <button class="footer-btn" onclick="loadChapter(currentChapterIndex - 1, 1)">« 上一章</button>
+            <div class="footer-center">
+                <span id="page-indicator">1/1</span>
+            </div>
+            <button class="footer-btn" onclick="loadChapter(currentChapterIndex + 1, 1)">下一章 »</button>
         </div>
     </div>
 
     <div class="bottom-nav" id="main-tabs">
-        <div class="nav-item active" onclick="switchTab('store')">
-            <div class="nav-icon">🏠</div>书城
-        </div>
-        <div class="nav-item" onclick="switchTab('shelf')">
-            <div class="nav-icon">📚</div>书架
-        </div>
+        <div class="nav-item active" onclick="switchTab('store')"><div class="nav-icon">🏠</div>书城</div>
+        <div class="nav-item" onclick="switchTab('shelf')"><div class="nav-icon">📚</div>书架</div>
     </div>
 
     <div class="settings-drawer" id="settings-drawer">
@@ -116,14 +138,12 @@
             <span>阅读设置</span>
             <span class="close-drawer" onclick="toggleSettingsDrawer()">×</span>
         </div>
-        
         <div class="drawer-section">
             <div class="section-title">语音朗读</div>
             <div class="btn-group">
                 <button class="tool-btn" id="speech-btn" onclick="toggleSpeech()" style="flex: 100%; background: var(--theme-color); color: white;">▶ 开始听书</button>
             </div>
         </div>
-
         <div class="drawer-section">
             <div class="section-title">背景与主题</div>
             <div class="btn-group">
@@ -133,7 +153,6 @@
                 <button class="tool-btn" style="background:#1a1a1a; color:#999;" onclick="setTheme('theme-dark')">夜间黑</button>
             </div>
         </div>
-
         <div class="drawer-section">
             <div class="section-title">字体大小</div>
             <div class="btn-group">
@@ -141,7 +160,6 @@
                 <button class="tool-btn" onclick="changeFontSize(1)">A+ 放大</button>
             </div>
         </div>
-
         <div class="drawer-section">
             <div class="section-title">翻页方式</div>
             <div class="btn-group">
@@ -162,45 +180,23 @@
         
         let currentFontSize = parseInt(localStorage.getItem("read_font")) || 17;
         let currentTheme = localStorage.getItem("read_theme") || '';
-        let currentPageMode = localStorage.getItem("read_page") || 'scroll'; 
+        let currentPageMode = localStorage.getItem("read_page") || 'slide'; 
 
         let isSpeaking = false;
         let synth = window.speechSynthesis;
         let currentUtterance = null;
+
+        let fullText = "";
+        let totalPages = 1;
+        let currentPage = 1;
 
         document.body.className = currentTheme;
         document.getElementById("chapter-content").style.fontSize = currentFontSize + "px";
 
         function getFreshUrl(base, path) { return base + path + "?t=" + new Date().getTime(); }
         function getShelf() { let shelf = localStorage.getItem("my_shelf"); return shelf ? JSON.parse(shelf) : []; }
-        
-        function addToShelf(bookId) {
-            let s = getShelf(); 
-            if(!s.includes(bookId)){ 
-                s.push(bookId); 
-                localStorage.setItem("my_shelf", JSON.stringify(s)); 
-                document.getElementById("store-btn-" + bookId).className = "action-btn btn-added";
-                document.getElementById("store-btn-" + bookId).innerText = "已在书架";
-                renderShelfOnly(); 
-            } 
-        }
-
-        function removeFromShelf(bookId) {
-            let s = getShelf().filter(i => i !== bookId); 
-            localStorage.setItem("my_shelf", JSON.stringify(s)); 
-            document.getElementById("shelf-btn-" + bookId).className = "action-btn btn-add";
-            document.getElementById("shelf-btn-" + bookId).innerText = "+ 加入书架";
-            document.getElementById("shelf-btn-" + bookId).onclick = function() { addToShelf(bookId); };
-            
-            let storeBtn = document.getElementById("store-btn-" + bookId);
-            if(storeBtn) {
-                storeBtn.className = "action-btn btn-add";
-                storeBtn.innerText = "+ 加入书架";
-                storeBtn.onclick = function() { addToShelf(bookId); };
-            }
-            renderShelfOnly(); 
-        }
-
+        function addToShelf(id) { let s = getShelf(); if(!s.includes(id)){ s.push(id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("store-btn-" + id).className = "app-btn btn-added"; document.getElementById("store-btn-" + id).innerText = "已在书架"; renderShelfOnly(); } }
+        function removeFromShelf(id) { let s = getShelf().filter(i => i !== id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("shelf-btn-" + id).className = "app-btn btn-add"; document.getElementById("shelf-btn-" + id).innerText = "+ 加入书架"; document.getElementById("shelf-btn-" + id).onclick = function() { addToShelf(id); }; let sb = document.getElementById("store-btn-" + id); if(sb) { sb.className = "app-btn btn-add"; sb.innerText = "+ 加入书架"; sb.onclick = function() { addToShelf(id); }; } renderShelfOnly(); }
         function getProgress(id) { return localStorage.getItem("progress_" + id); }
         function saveProgress(id, index) { localStorage.setItem("progress_" + id, index); }
 
@@ -230,9 +226,7 @@
                     const res = await fetch(getFreshUrl(FALLBACK_URL, "store.json"));
                     allBooks = await res.json();
                     renderBooks();
-                } catch (err) { 
-                    document.getElementById("store-list").innerHTML = `<div class="loading">加载失败，请检查网络。</div>`; 
-                }
+                } catch (err) { document.getElementById("store-list").innerHTML = `<div class="loading">加载失败。</div>`; }
             }
         }
 
@@ -251,10 +245,7 @@
                 
                 const storeItem = document.createElement("div");
                 storeItem.className = "book-item";
-                
-                let btnHTML = isAdded 
-                    ? `<button class="action-btn btn-added" id="store-btn-${book.id}">已在书架</button>` 
-                    : `<button class="action-btn btn-add" id="store-btn-${book.id}" onclick="addToShelf('${book.id}')">+ 加入书架</button>`;
+                let btnHTML = isAdded ? `<button class="app-btn btn-added" id="store-btn-${book.id}">已在书架</button>` : `<button class="app-btn btn-add" id="store-btn-${book.id}" onclick="addToShelf('${book.id}')">+ 加入书架</button>`;
 
                 storeItem.innerHTML = `
                     <div class="book-cover-box" onclick="openBook('${book.id}')">
@@ -276,14 +267,12 @@
             const shelfIds = getShelf();
             const shelfList = document.getElementById("shelf-list");
             shelfList.innerHTML = "";
-            
             allBooks.forEach(book => {
                 if (shelfIds.includes(book.id)) {
                     const progress = getProgress(book.id);
                     const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
                     const imgUrl = getFreshUrl(BASE_URL, book.cover);
                     const imgFallback = getFreshUrl(FALLBACK_URL, book.cover);
-                    
                     const shelfItem = document.createElement("div");
                     shelfItem.className = "book-item";
                     shelfItem.innerHTML = `
@@ -295,7 +284,7 @@
                                 <div class="book-author">${book.author}</div>
                             </div>
                         </div>
-                        <button class="action-btn btn-remove" id="shelf-btn-${book.id}" onclick="removeFromShelf('${book.id}')">移出书架</button>
+                        <button class="app-btn btn-remove" id="shelf-btn-${book.id}" onclick="removeFromShelf('${book.id}')">移出书架</button>
                     `;
                     shelfList.appendChild(shelfItem);
                 }
@@ -303,13 +292,11 @@
             if (shelfList.children.length === 0) shelfList.innerHTML = "<div class='loading'>书架空空如也~</div>";
         }
 
-        // 核心修改：加了网络超时的提示
         async function openBook(bookId) {
             currentBook = allBooks.find(b => b.id === bookId);
             if (!currentBook) return;
             stopSpeech();
             
-            // 在点击后马上跳转界面，让用户知道点成功了
             document.getElementById("store-view").style.display = "none";
             document.getElementById("shelf-view").style.display = "none";
             document.getElementById("main-tabs").style.display = "none";
@@ -319,13 +306,11 @@
             document.getElementById("detail-title").innerText = currentBook.title;
             
             const list = document.getElementById("chapter-list");
-            list.innerHTML = "<div class='loading'>正在加载目录...（如果一直卡住，可能是网络连不上 GitHub，请稍后重试）</div>";
-            
+            list.innerHTML = "<div class='loading'>正在加载目录...</div>";
             history.pushState({ page: 'catalog' }, '');
 
             try {
                 const res = await fetch(getFreshUrl(BASE_URL, currentBook.folder + "/catalog.json"));
-                if (!res.ok) throw new Error("加载失败");
                 const catalog = await res.json();
                 renderChapters(catalog);
             } catch (e) {
@@ -333,9 +318,7 @@
                     const res = await fetch(getFreshUrl(FALLBACK_URL, currentBook.folder + "/catalog.json"));
                     const catalog = await res.json();
                     renderChapters(catalog);
-                } catch (err) { 
-                    list.innerHTML = "<div class='loading'>目录加载失败。<br>请检查网络，或者稍后再试。</div>"; 
-                }
+                } catch (err) { list.innerHTML = "<div class='loading'>目录加载失败。</div>"; }
             }
         }
 
@@ -348,69 +331,145 @@
                 li.className = "chapter-item";
                 li.innerText = chap.title;
                 if (getProgress(currentBook.id) == index) { li.style.color = "var(--theme-color)"; li.innerText += " (上次读到)"; }
-                li.onclick = () => openChapter(index);
+                li.onclick = () => loadChapter(index, 1);
                 list.appendChild(li);
             });
         }
 
-        async function openChapter(index, isSlide = false) {
-            if (index < 0 || index >= currentCatalog.length) return;
+        async function loadChapter(index, pageToGo) {
+            if (index < 0) { alert("已经是第一章了！"); return; }
+            if (index >= currentCatalog.length) { alert("已经是最后一章了！"); return; }
+            
             currentChapterIndex = index;
+            currentPage = pageToGo || 1;
             const chap = currentCatalog[index];
             saveProgress(currentBook.id, index);
-            stopSpeech();
-
-            if(!isSlide) history.pushState({ page: 'reader' }, '');
 
             document.getElementById("detail-view").style.display = "none";
             document.getElementById("reader-view").style.display = "block";
             document.getElementById("header-title").innerText = "阅读";
             document.getElementById("chapter-title").innerText = chap.title;
-            
-            if(currentPageMode === 'slide') {
-                document.getElementById("page-nav").style.display = "flex";
-            } else {
-                document.getElementById("page-nav").style.display = "none";
-            }
 
             const contentDiv = document.getElementById("chapter-content");
             const chapterUrl = currentBook.folder + "/" + chap.file;
             const cacheKey = "cache_" + currentBook.id + "_" + index;
+            
+            contentDiv.innerText = "正在加载正文...";
 
-            if(isSlide && currentPageMode === 'slide') {
-                contentDiv.classList.add('slide-in');
-                setTimeout(() => contentDiv.classList.remove('slide-in'), 50);
+            let text = localStorage.getItem(cacheKey);
+            if (!text) {
+                try {
+                    const res = await fetch(getFreshUrl(BASE_URL, chapterUrl));
+                    text = await res.text();
+                    localStorage.setItem(cacheKey, text);
+                } catch (e) {
+                    try {
+                        const res = await fetch(getFreshUrl(FALLBACK_URL, chapterUrl));
+                        text = await res.text();
+                        localStorage.setItem(cacheKey, text);
+                    } catch (err) { contentDiv.innerText = "正文加载失败。"; return; }
+                }
             }
+            fullText = text;
+            applyPagination(); 
+        }
 
-            const cachedText = localStorage.getItem(cacheKey);
-            if (cachedText) {
-                contentDiv.innerText = cachedText;
-                window.scrollTo(0, 0);
+        function applyPagination() {
+            const contentDiv = document.getElementById("chapter-content");
+            const footer = document.getElementById("footer-bar");
+            const readerView = document.getElementById("reader-view");
+            
+            // 如果选了上下滑动模式
+            if (currentPageMode === 'scroll') {
+                readerView.classList.remove("paged-mode");
+                footer.style.display = "none"; // 滑动模式隐藏底部栏
+                contentDiv.innerText = fullText;
+                contentDiv.scrollTop = 0;
                 return;
             }
 
-            contentDiv.innerText = "正在加载正文...";
-            window.scrollTo(0, 0);
+            // 左右平移模式，开启分页
+            readerView.classList.add("paged-mode");
+            footer.style.display = "flex"; // 显示底部栏（切章+页码）
+            
+            contentDiv.style.fontSize = currentFontSize + "px";
+            const containerHeight = contentDiv.clientHeight;
+            const lineHeight = currentFontSize * 1.8; 
+            const linesPerPage = Math.floor(containerHeight / lineHeight);
+            const charsPerLine = Math.floor(contentDiv.clientWidth / currentFontSize);
+            const charsPerPage = linesPerPage * charsPerLine;
+            
+            totalPages = Math.ceil(fullText.length / charsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+            
+            renderPage();
+        }
 
-            try {
-                const res = await fetch(getFreshUrl(BASE_URL, chapterUrl));
-                if (!res.ok) throw new Error("主通道失败");
-                const text = await res.text();
-                contentDiv.innerText = text;
-                localStorage.setItem(cacheKey, text);
-            } catch (e) {
-                try {
-                    const res = await fetch(getFreshUrl(FALLBACK_URL, chapterUrl));
-                    const text = await res.text();
-                    contentDiv.innerText = text;
-                    localStorage.setItem(cacheKey, text);
-                } catch (err) {
-                    contentDiv.innerText = "正文加载失败，可能是网络问题或文件不存在。";
+        function renderPage() {
+            if (currentPageMode === 'scroll') return;
+            const contentDiv = document.getElementById("chapter-content");
+            
+            const containerHeight = contentDiv.clientHeight;
+            const lineHeight = currentFontSize * 1.8;
+            const linesPerPage = Math.floor(containerHeight / lineHeight);
+            const charsPerLine = Math.floor(contentDiv.clientWidth / currentFontSize);
+            const charsPerPage = linesPerPage * charsPerLine;
+
+            const startIndex = (currentPage - 1) * charsPerPage;
+            const endIndex = currentPage * charsPerPage;
+            
+            contentDiv.innerText = fullText.substring(startIndex, endIndex);
+            
+            document.getElementById("page-indicator").innerText = `${currentPage} / ${totalPages}`;
+        }
+
+        function handleScreenClick(zone) {
+            if (document.getElementById("settings-drawer").classList.contains('open')) {
+                toggleSettingsDrawer();
+                return;
+            }
+
+            if (currentPageMode === 'scroll') {
+                toggleSettingsDrawer(); 
+            } else {
+                if (zone === 'left') {
+                    flipPage('prev');
+                } else if (zone === 'right') {
+                    flipPage('next');
+                } else {
+                    toggleSettingsDrawer();
                 }
             }
         }
 
-        function changeChapter(offset) { openChapter(currentChapterIndex + offset, true); }
+        function flipPage(direction) {
+            const contentDiv = document.getElementById("chapter-content");
+            
+            if (direction === 'next') {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    contentDiv.classList.add('page-anim-right');
+                    setTimeout(() => contentDiv.classList.remove('page-anim-right'), 200);
+                    renderPage();
+                } else {
+                    loadChapter(currentChapterIndex + 1, 1);
+                }
+            } else if (direction === 'prev') {
+                if (currentPage > 1) {
+                    currentPage--;
+                    contentDiv.classList.add('page-anim-left');
+                    setTimeout(() => contentDiv.classList.remove('page-anim-left'), 200);
+                    renderPage();
+                } else {
+                    if (currentChapterIndex > 0) {
+                        loadChapter(currentChapterIndex - 1, 9999); 
+                    } else {
+                        alert("已经是全书第一页了！");
+                    }
+                }
+            }
+        }
 
         function goBack() {
             document.getElementById("settings-drawer").classList.remove("open");
@@ -421,7 +480,6 @@
                 document.getElementById("reader-view").style.display = "none";
                 document.getElementById("detail-view").style.display = "block";
                 document.getElementById("header-title").innerText = "目录";
-                document.getElementById("page-nav").style.display = "none";
             } else if (document.getElementById("detail-view").style.display === "block") {
                 document.getElementById("detail-view").style.display = "none";
                 document.getElementById("main-tabs").style.display = "flex";
@@ -435,14 +493,23 @@
         function toggleSettingsDrawer() {
             const drawer = document.getElementById("settings-drawer");
             const header = document.getElementById("main-header");
+            const footer = document.getElementById("footer-bar");
+            
             if (drawer.classList.contains("open")) {
                 drawer.classList.remove("open");
                 header.classList.remove("hidden");
+                // 如果是分页模式，隐藏底部切章栏
+                if(currentPageMode === 'slide') footer.style.bottom = "-100px"; 
             } else {
                 drawer.classList.add("open");
                 header.classList.add("hidden");
+                // 呼出菜单时，顺便把底部切章栏也顶上来
+                if(currentPageMode === 'slide') footer.style.bottom = "0";
             }
         }
+
+        // 初始化底部栏状态
+        if(currentPageMode === 'slide') document.getElementById("footer-bar").style.bottom = "-100px";
 
         function setTheme(themeName) {
             currentTheme = themeName;
@@ -456,64 +523,45 @@
             if (currentFontSize > 30) currentFontSize = 30;
             document.getElementById("chapter-content").style.fontSize = currentFontSize + "px";
             localStorage.setItem("read_font", currentFontSize);
+            
+            if (currentPageMode === 'slide') {
+                applyPagination();
+            }
         }
 
         function setPageMode(mode) {
             currentPageMode = mode;
             localStorage.setItem("read_page", mode);
-            if (mode === 'slide') {
-                document.getElementById("page-nav").style.display = "flex";
-                alert("已切换为左右翻页模式：点击屏幕左右两侧悬浮按钮翻页。");
-            } else {
-                document.getElementById("page-nav").style.display = "none";
-                alert("已切换为上下滑动模式。");
-            }
+            currentPage = 1; 
+            applyPagination();
             toggleSettingsDrawer();
         }
 
         function toggleSpeech() {
-            const textToRead = document.getElementById("chapter-content").innerText;
+            const textToRead = fullText; 
             const btn = document.getElementById("speech-btn");
             const indicator = document.getElementById("audio-indicator");
 
-            if (isSpeaking) {
-                stopSpeech();
-                return;
-            }
+            if (isSpeaking) { stopSpeech(); return; }
 
-            if (textToRead && textToRead !== "正在加载正文..." && textToRead !== "正文加载失败，可能是网络问题或文件不存在。") {
+            if (textToRead && textToRead !== "正在加载正文...") {
                 currentUtterance = new SpeechSynthesisUtterance(textToRead);
                 currentUtterance.lang = 'zh-CN';
                 currentUtterance.rate = 1.0;
-
                 currentUtterance.onend = function() {
-                    isSpeaking = false;
-                    btn.innerText = "▶ 开始听书";
-                    btn.style.background = "var(--theme-color)";
-                    indicator.style.display = "none";
+                    isSpeaking = false; btn.innerText = "▶ 开始听书"; btn.style.background = "var(--theme-color)"; indicator.style.display = "none";
                 };
-
                 synth.speak(currentUtterance);
-                isSpeaking = true;
-                btn.innerText = "⏹ 停止朗读";
-                btn.style.background = "#d32f2f";
-                indicator.style.display = "inline-block";
-            } else {
-                alert("正文还没加载出来呢，不能听书哦~");
-            }
+                isSpeaking = true; btn.innerText = "⏹ 停止朗读"; btn.style.background = "#d32f2f"; indicator.style.display = "inline-block";
+            } else { alert("正文还没加载出来呢！"); }
         }
 
         function stopSpeech() {
-            if (synth.speaking) {
-                synth.cancel();
-            }
+            if (synth.speaking) synth.cancel();
             isSpeaking = false;
             const btn = document.getElementById("speech-btn");
             const indicator = document.getElementById("audio-indicator");
-            if(btn) {
-                btn.innerText = "▶ 开始听书";
-                btn.style.background = "var(--theme-color)";
-            }
+            if(btn) { btn.innerText = "▶ 开始听书"; btn.style.background = "var(--theme-color)"; }
             if(indicator) indicator.style.display = "none";
         }
 
