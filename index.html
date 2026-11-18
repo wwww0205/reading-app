@@ -53,10 +53,12 @@
         }
         
         .paged-mode .content-box {
-            height: calc(100vh - 100px); /* 减去顶部和底部的高度 */
+            /* border-box：15px 内边距算进 100vh 里，最后一行才不会被屏幕底边切掉半行 */
+            height: calc(100vh - 100px);
             margin-top: 50px;
             overflow: hidden; 
             padding: 15px;
+            box-sizing: border-box;
             position: relative;
         }
 
@@ -71,7 +73,7 @@
         .footer-center { font-size: 12px; color: #888; display: flex; flex-direction: column; align-items: center;}
 
         /* 底部设置面板 */
-        .settings-drawer { position: fixed; bottom: -100%; left: 0; width: 100%; background: var(--card-bg); border-top-left-radius: 15px; border-top-right-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 40; transition: bottom 0.3s; display: flex; flex-direction: column; padding-bottom: 20px;}
+        .settings-drawer { position: fixed; bottom: -110%; left: 0; width: 100%; background: var(--card-bg); border-top-left-radius: 15px; border-top-right-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 40; transition: bottom 0.3s; display: flex; flex-direction: column; padding-bottom: 20px; max-height: 82vh; overflow-y: auto; -webkit-overflow-scrolling: touch;}
         .settings-drawer.open { bottom: 0; }
         .drawer-header { display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.2); font-weight: bold;}
         .drawer-section { padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.1); }
@@ -85,15 +87,52 @@
         .zone-left { left: 0; }
         .zone-center { left: 33.33%; }
 
-        /* 右上角齿轮：平时藏着，点一下正文才冒出来；点它才弹设置面板 */
-        #gear-btn {
-            position: fixed; top: 58px; right: 14px; width: 38px; height: 38px;
-            border: none; border-radius: 50%; z-index: 30; cursor: pointer;
-            background: rgba(0,0,0,0.55); color: #fff;
-            display: none; align-items: center; justify-content: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.25); padding: 0;
+        /* 右上角工具条：点一下正文才出现（« 上一章 / 设置 / » 下一章） */
+        #reader-tools {
+            position: fixed; top: 58px; right: 14px; z-index: 30;
+            display: none; gap: 8px;
         }
-        #gear-btn.show { display: flex; }
+        #reader-tools.show { display: flex; }
+        #reader-tools button {
+            width: 38px; height: 38px; border: none; border-radius: 50%;
+            background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25); font-size: 17px; line-height: 1;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #reader-tools button:active { background: rgba(0,0,0,0.78); }
+
+        /* 底部操作面板：点正文出现，上一章 / 目录 / 下一章 */
+        #bottom-panel {
+            position: fixed; left: 12px; right: 12px; bottom: 62px; z-index: 28;
+            display: none; gap: 8px; padding: 8px; border-radius: 14px;
+            background: rgba(20,20,20,0.68); backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+        }
+        #bottom-panel.show { display: flex; }
+        #bottom-panel button {
+            flex: 1; padding: 11px 6px; border: none; border-radius: 10px;
+            background: rgba(255,255,255,0.15); color: #fff; font-size: 13px;
+            cursor: pointer; -webkit-tap-highlight-color: transparent;
+        }
+        #bottom-panel button:active { background: rgba(255,255,255,0.32); }
+
+        /* 底部小提示条（代替弹窗，不打断） */
+        #toast {
+            position: fixed; left: 50%; bottom: 92px; transform: translate(-50%, 10px);
+            background: rgba(0,0,0,0.78); color: #fff; padding: 9px 16px; border-radius: 20px;
+            font-size: 13px; max-width: 80vw; text-align: center;
+            opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60;
+        }
+        #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+        /* 隐藏的测量框：只用来量"这一页能放多少字"，屏幕上看不见 */
+        #page-measure {
+            position: absolute; left: -9999px; top: 0; visibility: hidden;
+            pointer-events: none; overflow: hidden; white-space: pre-wrap;
+            margin: 0; padding: 0; border: 0;
+        }
         .zone-right { right: 0; }
         
         .loading { text-align: center; padding: 20px; color: #666; width: 100%; }
@@ -126,12 +165,16 @@
         
         <div class="content-box" id="chapter-content">正在加载正文...</div>
         
-        <button id="gear-btn" aria-label="阅读设置" onclick="gearClick(event)">
-            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-                <circle cx="12" cy="12" r="3.3"/>
-                <path d="M12 2.4v2.6M12 19v2.6M2.4 12h2.6M19 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/>
-            </svg>
-        </button>
+        <div id="reader-tools">
+            <button id="prev-chapter-btn" aria-label="上一章" onclick="chapterStep(-1)">«</button>
+            <button id="gear-btn" aria-label="阅读设置" onclick="gearClick(event)">
+                <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                    <circle cx="12" cy="12" r="3.3"/>
+                    <path d="M12 2.4v2.6M12 19v2.6M2.4 12h2.6M19 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/>
+                </svg>
+            </button>
+            <button id="next-chapter-btn" aria-label="下一章" onclick="chapterStep(1)">»</button>
+        </div>
 
         <div class="touch-zone zone-left" onclick="handleScreenClick('left')"></div>
         <div class="touch-zone zone-center" onclick="handleScreenClick('center')"></div>
@@ -150,6 +193,14 @@
     <div class="bottom-nav" id="main-tabs">
         <div class="nav-item active" onclick="switchTab('store')"><div class="nav-icon">🏠</div>书城</div>
         <div class="nav-item" onclick="switchTab('shelf')"><div class="nav-icon">📚</div>书架</div>
+    </div>
+
+    <div id="page-measure"></div>
+
+    <div id="bottom-panel">
+        <button id="panel-prev" onclick="chapterStep(-1)">« 上一章</button>
+        <button id="panel-catalog" onclick="openCatalogFromReader()">☰ 目录</button>
+        <button id="panel-next" onclick="chapterStep(1)">下一章 »</button>
     </div>
 
     <div class="settings-drawer" id="settings-drawer">
@@ -180,6 +231,14 @@
             </div>
         </div>
         <div class="drawer-section">
+            <div class="section-title">离线缓存（加载慢就点这个）</div>
+            <div class="btn-group">
+                <button class="tool-btn" id="cache-btn" onclick="cacheWholeBook()" style="flex: 100%; background: var(--theme-color); color: white;">📥 缓存全书</button>
+                <button class="tool-btn" onclick="clearCache()">清空缓存</button>
+            </div>
+            <div id="cache-status" style="margin-top: 10px; font-size: 12px; color: #888;">—</div>
+        </div>
+        <div class="drawer-section">
             <div class="section-title">翻页方式</div>
             <div class="btn-group">
                 <button class="tool-btn" onclick="setPageMode('scroll')">上下滑动</button>
@@ -208,6 +267,7 @@
         let fullText = "";
         let totalPages = 1;
         let currentPage = 1;
+        let pageStarts = [0];   // 每一页的起始字符下标
 
         document.body.className = currentTheme;
         document.getElementById("chapter-content").style.fontSize = currentFontSize + "px";
@@ -241,16 +301,28 @@
         }
 
         async function loadStore() {
+            // 先用本地缓存立刻显示，再去网上静默更新 —— 打开不用干等
+            const cached = localStorage.getItem("cache_store");
+            if (cached) {
+                try { allBooks = JSON.parse(cached); renderBooks(); } catch (e) {}
+            }
+            let fetched = false;
             try {
                 const res = await fetch(getFreshUrl(BASE_URL, "store.json"));
                 allBooks = await res.json();
-                renderBooks();
+                fetched = true;
             } catch (e) {
                 try {
                     const res = await fetch(getFreshUrl(FALLBACK_URL, "store.json"));
                     allBooks = await res.json();
-                    renderBooks();
-                } catch (err) { document.getElementById("store-list").innerHTML = `<div class="loading">加载失败。</div>`; }
+                    fetched = true;
+                } catch (err) { fetched = false; }
+            }
+            if (fetched) {
+                try { localStorage.setItem("cache_store", JSON.stringify(allBooks)); } catch (e) {}
+                renderBooks();
+            } else if (!cached) {
+                document.getElementById("store-list").innerHTML = `<div class="loading">加载失败，请检查网络。</div>`;
             }
         }
 
@@ -336,13 +408,22 @@
             try {
                 const res = await fetch(getFreshUrl(BASE_URL, currentBook.folder + "/catalog.json"));
                 const catalog = await res.json();
+                try { localStorage.setItem("cache_catalog_" + currentBook.id, JSON.stringify(catalog)); } catch (e2) {}
                 renderChapters(catalog);
             } catch (e) {
                 try {
                     const res = await fetch(getFreshUrl(FALLBACK_URL, currentBook.folder + "/catalog.json"));
                     const catalog = await res.json();
+                    try { localStorage.setItem("cache_catalog_" + currentBook.id, JSON.stringify(catalog)); } catch (e2) {}
                     renderChapters(catalog);
-                } catch (err) { list.innerHTML = "<div class='loading'>目录加载失败。</div>"; }
+                } catch (err) {
+                    // 断网时用本地存的目录，照样能进书
+                    const cachedCat = localStorage.getItem("cache_catalog_" + currentBook.id);
+                    if (cachedCat) {
+                        try { renderChapters(JSON.parse(cachedCat)); return; } catch (e3) {}
+                    }
+                    list.innerHTML = "<div class='loading'>目录加载失败。</div>";
+                }
             }
         }
 
@@ -409,6 +490,10 @@
                 readerView.classList.remove("paged-mode");
                 readerView.classList.add("no-zones");   // 关掉透明感应区，恢复手指滚动
                 footer.style.display = "none"; // 滑动模式隐藏底部栏
+                const bp2 = document.getElementById("bottom-panel");
+                if (bp2) bp2.style.bottom = "20px";   // 滑动模式底部没有切章栏，面板贴近底边
+                contentDiv.style.height = "";      // 还原成 CSS 里的高度
+                contentDiv.style.marginTop = "";
                 contentDiv.innerText = fullText;
                 contentDiv.scrollTop = 0;
                 return;
@@ -420,38 +505,46 @@
             footer.style.display = "flex"; // 显示底部栏（切章+页码）
             
             contentDiv.style.fontSize = currentFontSize + "px";
-            const containerHeight = contentDiv.clientHeight;
-            const lineHeight = currentFontSize * 1.8; 
-            const linesPerPage = Math.floor(containerHeight / lineHeight);
-            const charsPerLine = Math.floor(contentDiv.clientWidth / currentFontSize);
-            const charsPerPage = linesPerPage * charsPerLine;
-            
-            totalPages = Math.ceil(fullText.length / charsPerPage) || 1;
+
+            // 手机浏览器的 100vh 会把底部工具栏一起算进去，导致最后一行藏到工具栏底下被切一半。
+            // 这里直接量"真正看得见的高度"，再留 6px 安全余量。
+            const visH = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+            const headerH = 50;
+            const footerH = 50;   // 分页模式底部切章栏一直显示
+            const boxH = Math.max(180, Math.round(visH - headerH - footerH - 6));
+            contentDiv.style.height = boxH + "px";
+            contentDiv.style.marginTop = headerH + "px";
+
+            const bp = document.getElementById("bottom-panel");
+            if (bp) bp.style.bottom = "62px";   // 分页模式下面有切章栏，面板往上让一让
+
+            pageStarts = computePageStarts();
+            totalPages = Math.max(1, pageStarts.length - 1);
             if (currentPage > totalPages) currentPage = totalPages;
             if (currentPage < 1) currentPage = 1;
-            
+
             renderPage();
         }
 
         function renderPage() {
             if (currentPageMode === 'scroll') return;
             const contentDiv = document.getElementById("chapter-content");
-            
-            const containerHeight = contentDiv.clientHeight;
-            const lineHeight = currentFontSize * 1.8;
-            const linesPerPage = Math.floor(containerHeight / lineHeight);
-            const charsPerLine = Math.floor(contentDiv.clientWidth / currentFontSize);
-            const charsPerPage = linesPerPage * charsPerLine;
+            const ind = document.getElementById("page-indicator");
 
-            const startIndex = (currentPage - 1) * charsPerPage;
-            const endIndex = currentPage * charsPerPage;
-            
-            contentDiv.innerText = fullText.substring(startIndex, endIndex);
-            
-            document.getElementById("page-indicator").innerText = `${currentPage} / ${totalPages}`;
+            if (!pageStarts || pageStarts.length < 2) {
+                contentDiv.innerText = fullText;
+            } else {
+                const from = pageStarts[currentPage - 1] || 0;
+                const to = (currentPage < pageStarts.length) ? pageStarts[currentPage] : fullText.length;
+                contentDiv.innerText = fullText.slice(from, to);
+            }
+            contentDiv.scrollTop = 0;
+            if (ind) ind.innerText = `${currentPage} / ${totalPages}`;
         }
 
         function handleScreenClick(zone) {
+            // 刚做了一次左右滑动，紧接着的 click 是余波，忽略，别再翻一页
+            if (window.__justSwiped && Date.now() - window.__justSwiped < 400) return;
             if (document.getElementById("settings-drawer").classList.contains('open')) {
                 toggleSettingsDrawer();
                 return;
@@ -471,29 +564,29 @@
         }
 
         function flipPage(direction) {
+            hideTools();   // 翻页就把操作面板收起来
             const contentDiv = document.getElementById("chapter-content");
-            
+
             if (direction === 'next') {
                 if (currentPage < totalPages) {
                     currentPage++;
                     contentDiv.classList.add('page-anim-right');
-                    setTimeout(() => contentDiv.classList.remove('page-anim-right'), 200);
+                    setTimeout(() => contentDiv.classList.remove('page-anim-right'), 220);
                     renderPage();
                 } else {
-                    loadChapter(currentChapterIndex + 1, 1);
+                    // 到本章最后一页：不自动跳章，把切章按钮亮出来让人自己决定
+                    showTools();
+                    toast("本章已读完，点右上角「»」进下一章");
                 }
             } else if (direction === 'prev') {
                 if (currentPage > 1) {
                     currentPage--;
                     contentDiv.classList.add('page-anim-left');
-                    setTimeout(() => contentDiv.classList.remove('page-anim-left'), 200);
+                    setTimeout(() => contentDiv.classList.remove('page-anim-left'), 220);
                     renderPage();
                 } else {
-                    if (currentChapterIndex > 0) {
-                        loadChapter(currentChapterIndex - 1, 9999); 
-                    } else {
-                        alert("已经是全书第一页了！");
-                    }
+                    showTools();
+                    toast("已是本章第一页，点右上角「«」回上一章");
                 }
             }
         }
@@ -533,25 +626,240 @@
 
         window.addEventListener('popstate', function(e) { goBack(); });
 
-        function showGear() {
-            const g = document.getElementById("gear-btn");
-            if (g) g.classList.add("show");
+        // ---------- 阅读操作层：右上角工具条 + 底部面板，一起出现一起收 ----------
+        function panelsVisible() {
+            const t = document.getElementById("reader-tools");
+            return !!(t && t.classList.contains("show"));
         }
-        function hideGear() {
-            const g = document.getElementById("gear-btn");
-            if (g) g.classList.remove("show");
+        function showTools() {
+            const t = document.getElementById("reader-tools");
+            const p = document.getElementById("bottom-panel");
+            if (t) t.classList.add("show");
+            if (p) p.classList.add("show");
+            // 4 秒没动作就自动收起，免得一直盖着正文
+            clearTimeout(window.__panelTimer);
+            window.__panelTimer = setTimeout(hideTools, 4000);
         }
-        function toggleGear() {
-            const g = document.getElementById("gear-btn");
-            if (!g) return;
-            g.classList.contains("show") ? g.classList.remove("show") : g.classList.add("show");
+        function hideTools() {
+            const t = document.getElementById("reader-tools");
+            const p = document.getElementById("bottom-panel");
+            if (t) t.classList.remove("show");
+            if (p) p.classList.remove("show");
+            clearTimeout(window.__panelTimer);
         }
-        // 点齿轮：先收起齿轮，再弹出设置面板
+        function toggleTools() {
+            panelsVisible() ? hideTools() : showTools();
+        }
+
+        // 底部面板的「目录」：回到这本书的章节目录页
+        function openCatalogFromReader() {
+            hideTools();
+            goBack();
+        }
+        // 旧函数名保留（别处还在调用），行为统一：控制整个工具条
+        function showGear() { showTools(); }
+        function hideGear() { hideTools(); }
+        function toggleGear() { toggleTools(); }
+
+        // 点齿轮：收起工具条，弹出设置面板
         function gearClick(e) {
             if (e) e.stopPropagation();
-            hideGear();
+            hideTools();
             const drawer = document.getElementById("settings-drawer");
             if (!drawer.classList.contains("open")) toggleSettingsDrawer();
+        }
+
+        // 工具条上的切章：-1 上一章 / +1 下一章
+        function chapterStep(dir) {
+            hideTools();
+            const target = currentChapterIndex + dir;
+            if (target < 0) { toast("已经是第一章了"); return; }
+            if (target >= currentCatalog.length) { toast("已经是最后一章了"); return; }
+            loadChapter(target, dir > 0 ? 1 : 9999);
+        }
+
+        // 底部小提示，不打断阅读
+        function toast(msg) {
+            let t = document.getElementById("toast");
+            if (!t) {
+                t = document.createElement("div");
+                t.id = "toast";
+                document.body.appendChild(t);
+            }
+            t.textContent = msg;
+            t.classList.add("show");
+            clearTimeout(window.__toastTimer);
+            window.__toastTimer = setTimeout(function () { t.classList.remove("show"); }, 1800);
+        }
+
+        // ---------- 离线缓存：一次性把所有章节存到手机里 ----------
+        function cacheKeyOf(bookId, index) { return "cache_" + bookId + "_" + index; }
+
+        function cacheStats(book) {
+            const total = currentCatalog ? currentCatalog.length : 0;
+            let done = 0;
+            for (let i = 0; i < total; i++) {
+                if (localStorage.getItem(cacheKeyOf(book.id, i))) done++;
+            }
+            return { done: done, total: total };
+        }
+
+        function updateCacheStatus() {
+            const st = document.getElementById("cache-status");
+            if (!st) return;
+            const book = currentBook || allBooks[0];
+            if (!book || !currentCatalog || !currentCatalog.length) {
+                st.textContent = "打开一本书之后就能缓存";
+                return;
+            }
+            const s = cacheStats(book);
+            if (s.total === 0) { st.textContent = "这本书还没有章节"; return; }
+            st.textContent = (s.done >= s.total)
+                ? `已缓存全部 ${s.total} 章，没网也能看`
+                : `已缓存 ${s.done} / ${s.total} 章`;
+        }
+
+        async function cacheWholeBook() {
+            const book = currentBook || allBooks[0];
+            if (!book) { toast("先打开一本书"); return; }
+            if (!currentCatalog || !currentCatalog.length) { toast("先在目录页点进一章，再来缓存"); return; }
+
+            const btn = document.getElementById("cache-btn");
+            const st = document.getElementById("cache-status");
+            if (btn) { btn.disabled = true; btn.textContent = "缓存中…"; }
+
+            let ok = 0, fail = 0;
+            for (let i = 0; i < currentCatalog.length; i++) {
+                const key = cacheKeyOf(book.id, i);
+                if (st) st.textContent = `正在缓存… ${i + 1} / ${currentCatalog.length}`;
+                if (!localStorage.getItem(key)) {
+                    const url = book.folder + "/" + currentCatalog[i].file;
+                    let text = null;
+                    try {
+                        const r = await fetch(getFreshUrl(BASE_URL, url));
+                        if (r.ok) text = await r.text();
+                    } catch (e1) {}
+                    if (!text) {
+                        try {
+                            const r = await fetch(getFreshUrl(FALLBACK_URL, url));
+                            if (r.ok) text = await r.text();
+                        } catch (e2) {}
+                    }
+                    if (text) {
+                        try { localStorage.setItem(key, text); } catch (e3) {
+                            if (st) st.textContent = `手机存储空间不够，缓存到第 ${i + 1} 章就满了`;
+                            if (btn) { btn.disabled = false; btn.textContent = "📥 缓存全书"; }
+                            return;
+                        }
+                    } else { fail++; }
+                }
+                ok++;
+            }
+            if (btn) { btn.disabled = false; btn.textContent = "📥 缓存全书"; }
+            updateCacheStatus();
+            toast(fail ? `缓存完成，有 ${fail} 章没下载成功` : "缓存完成，之后没网也能看");
+        }
+
+        function clearCache() {
+            const book = currentBook || allBooks[0];
+            if (!book) { toast("先打开一本书"); return; }
+            const total = (currentCatalog && currentCatalog.length) ? currentCatalog.length : 50;
+            for (let i = 0; i < total + 5; i++) localStorage.removeItem(cacheKeyOf(book.id, i));
+            updateCacheStatus();
+            toast("已清空这本书的缓存");
+        }
+
+        // ---------- 左右滑动手势（真的能滑，不只是点） ----------
+        function bindSwipe() {
+            const rv = document.getElementById("reader-view");
+            if (!rv) return;
+            let sx = 0, sy = 0, active = false;
+
+            rv.addEventListener('touchstart', function (e) {
+                if (currentPageMode !== 'slide') return;
+                if (!e.touches || !e.touches.length) return;
+                sx = e.touches[0].clientX;
+                sy = e.touches[0].clientY;
+                active = true;
+            }, { passive: true });
+
+            rv.addEventListener('touchend', function (e) {
+                if (!active || currentPageMode !== 'slide') return;
+                active = false;
+                const t = e.changedTouches[0];
+                const dx = t.clientX - sx;
+                const dy = t.clientY - sy;
+                if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+                    window.__justSwiped = Date.now();   // 标记一下，别让这次的 click 再翻一页
+                    flipPage(dx < 0 ? 'next' : 'prev');
+                }
+            }, { passive: true });
+        }
+
+        // ---------- 真正的分页：拿尺子量，不再猜字数 ----------
+        // 返回每页的起始下标，例如 [0, 320, 655, 全文长度]
+        function computePageStarts() {
+            const contentDiv = document.getElementById("chapter-content");
+            const m = document.getElementById("page-measure");
+            const text = fullText || "";
+            if (!m || !text) return [0, text.length];
+
+            const cs = getComputedStyle(contentDiv);
+            const padL = parseFloat(cs.paddingLeft) || 0;
+            const padR = parseFloat(cs.paddingRight) || 0;
+            const padT = parseFloat(cs.paddingTop) || 0;
+            const padB = parseFloat(cs.paddingBottom) || 0;
+            // 正文真正能用的宽和高（扣掉内边距）
+            const innerW = Math.max(80, contentDiv.clientWidth - padL - padR);
+            const innerH = Math.max(60, contentDiv.clientHeight - padT - padB);
+
+            // 让测量框的字体、行高、换行规则跟正文完全一致
+            m.style.width = innerW + "px";
+            m.style.fontSize = cs.fontSize;
+            m.style.fontFamily = cs.fontFamily;
+            m.style.lineHeight = cs.lineHeight;
+            m.style.letterSpacing = cs.letterSpacing;
+            m.style.whiteSpace = "pre-wrap";
+            m.style.wordBreak = "break-word";
+            m.style.boxSizing = "content-box";
+
+            const lineH = parseFloat(cs.lineHeight) || (currentFontSize * 1.8);
+            const fontPx = parseFloat(cs.fontSize) || currentFontSize;
+            // 粗估一页字数，只用来给二分查找缩小范围，不直接拿来分页
+            const estimate = Math.max(80, Math.floor((innerH / lineH) * (innerW / fontPx)));
+
+            const n = text.length;
+            const starts = [0];
+            let start = 0;
+            let guard = 0;
+
+            while (start < n && guard++ < 5000) {
+                let lo = start + 1;
+                let hi = Math.min(n, start + estimate * 3);
+                let best = start + 1;
+
+                // 二分查找：能完整塞进一页的最多字数
+                while (lo <= hi) {
+                    const mid = (lo + hi) >> 1;
+                    m.textContent = text.slice(start, mid);
+                    if (m.scrollHeight <= innerH) { best = mid; lo = mid + 1; }
+                    else { hi = mid - 1; }
+                }
+
+                let end = best;
+                // 尽量断在句号或换行处，别把一句话拦腰砍断
+                if (end < n) {
+                    const limit = Math.max(start + 1, end - 40);
+                    for (let i = end; i > limit; i--) {
+                        if ("。！？；…”」\n".indexOf(text[i - 1]) >= 0) { end = i; break; }
+                    }
+                }
+                if (end <= start) end = start + 1;
+                starts.push(end);
+                start = end;
+            }
+            m.textContent = "";
+            return starts;
         }
 
         function toggleSettingsDrawer() {
@@ -566,6 +874,7 @@
                 if(currentPageMode === 'slide') footer.style.bottom = "-100px"; 
             } else {
                 hideGear();
+                updateCacheStatus();
                 drawer.classList.add("open");
                 header.classList.add("hidden");
                 // 呼出菜单时，顺便把底部切章栏也顶上来
@@ -679,6 +988,16 @@
 
         window.onload = function () {
             bindGlobalClicks();
+            bindSwipe();
+            function relayout() {
+                clearTimeout(window.__resizeTimer);
+                window.__resizeTimer = setTimeout(function () {
+                    if (currentPageMode === 'slide' && fullText) applyPagination();
+                }, 250);
+            }
+            window.addEventListener('resize', relayout);
+            window.addEventListener('orientationchange', relayout);
+            if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
             // 滑动模式下遮罩已关掉，用"点一下正文"来唤出设置面板；拖动不会触发 click，所以不影响滚动
             const contentDiv = document.getElementById("chapter-content");
             if (contentDiv) {
@@ -686,7 +1005,7 @@
                     if (currentPageMode !== 'scroll') return;
                     const drawer = document.getElementById("settings-drawer");
                     if (drawer.classList.contains("open")) { toggleSettingsDrawer(); return; }
-                    toggleGear();          // 点正文：齿轮出现/消失，面板不动
+                    toggleGear();          // 点正文：操作面板出现/收起
                 });
             }
             loadStore();
