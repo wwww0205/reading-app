@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>我的阅读器</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; -webkit-tap-highlight-color: transparent;}
+        body { background-color: #f5f5f5; color: #333; transition: background 0.3s, color 0.3s; overflow: hidden;}
+        
+        :root { --theme-color: #4CAF50; --bg-color: #f5f5f5; --text-color: #333; --card-bg: #fff; }
+        body.theme-dark { --theme-color: #2c2c2c; --bg-color: #1a1a1a; --text-color: #999; --card-bg: #2a2a2a; }
+        body.theme-sepia { --theme-color: #8b7355; --bg-color: #f7e8c6; --text-color: #5b4636; --card-bg: #fdf5e6; }
+        body.theme-green { --theme-color: #3b6b52; --bg-color: #cce8cf; --text-color: #2b4b36; --card-bg: #e0f2e1; }
+
+        .header { background-color: var(--theme-color); color: white; padding: 12px 15px; position: fixed; top: 0; left: 0; width: 100%; z-index: 20; display: flex; justify-content: space-between; align-items: center; font-size: 18px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.3s;}
+        .header.hidden { transform: translateY(-100%); }
+        .header-btn { cursor: pointer; font-size: 15px; padding: 5px 10px; font-weight: normal; width: 70px; display: flex; align-items: center; z-index: 11;}
+        
+        .audio-status { font-size: 12px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; display: none; margin-left: 5px;}
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; height: 55px; background: var(--card-bg); border-top: 1px solid #ddd; display: flex; z-index: 30; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; font-size: 12px; cursor: pointer; }
+        .nav-item.active { color: var(--theme-color); }
+        
+        .view-section { display: none; padding: 65px 15px 70px; background: var(--bg-color); min-height: 100vh; overflow-y: auto;}
+        .book-list { display: flex; flex-wrap: wrap; gap: 15px; }
+        
+        .book-item { width: calc(33.33% - 10px); background: var(--card-bg); border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
+        .book-cover-box { cursor: pointer; position: relative; z-index: 10; }
+        .book-item img { width: 100%; height: 150px; object-fit: cover; background-color: #ddd; display: block; }
+        .book-info { padding: 8px; cursor: pointer; }
+        .book-title { font-size: 14px; font-weight: bold; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); }
+        .book-author { font-size: 11px; color: #888; }
+        .read-badge { position: absolute; top: 5px; left: 5px; background: rgba(76, 175, 80, 0.9); color: white; font-size: 11px; padding: 2px 5px; border-radius: 3px; z-index: 2; }
+        
+        .app-btn { width: 100%; padding: 8px; border: none; font-size: 12px; cursor: pointer; font-weight: bold; position: relative; z-index: 10;}
+        .btn-add { background: var(--theme-color); color: white; }
+        .btn-added { background: #e0e0e0; color: #888; cursor: default; }
+        .btn-remove { background: #ffebee; color: #d32f2f; }
+
+        #detail-view { display: none; background: var(--bg-color); min-height: 100vh; color: var(--text-color); padding-top: 50px;}
+        .chapter-list { list-style: none; padding: 15px; padding-bottom: 70px;}
+        .chapter-item { padding: 15px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 16px; }
+        
+        /* 阅读区 */
+        #reader-view { display: none; background: var(--bg-color); min-height: 100vh; color: var(--text-color); overflow: hidden;}
+        
+        .content-box { 
+            line-height: 1.8; font-size: 17px; white-space: pre-wrap; 
+            padding: 60px 15px 80px; 
+            height: 100vh; overflow-y: auto;
+        }
+        
+        .paged-mode .content-box {
+            /* border-box：15px 内边距算进 100vh 里，最后一行才不会被屏幕底边切掉半行 */
+            height: calc(100vh - 100px);
+            margin-top: 50px;
+            overflow: hidden; 
+            padding: 15px;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .page-anim-right { animation: slideRight 0.2s ease-out; }
+        .page-anim-left { animation: slideLeft 0.2s ease-out; }
+        @keyframes slideRight { from { transform: translateX(30%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideLeft { from { transform: translateX(-30%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* 底部状态栏 (页码 + 切章) */
+        .footer-bar { position: fixed; bottom: 0; left: 0; width: 100%; height: 50px; display: none; justify-content: space-between; align-items: center; padding: 0 15px; font-size: 14px; color: var(--text-color); background: var(--card-bg); z-index: 10; border-top: 1px solid rgba(128,128,128,0.2); transition: bottom 0.3s; }
+        .footer-btn { background: transparent; border: 1px solid rgba(128,128,128,0.3); padding: 5px 15px; border-radius: 15px; font-size: 13px; cursor: pointer; color: var(--text-color);}
+        .footer-center { font-size: 12px; color: #888; display: flex; flex-direction: column; align-items: center;}
+
+        /* 底部设置面板 */
+        .settings-drawer { position: fixed; bottom: -110%; left: 0; width: 100%; background: var(--card-bg); border-top-left-radius: 15px; border-top-right-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 40; transition: bottom 0.3s; display: flex; flex-direction: column; padding-bottom: 20px; max-height: 82vh; overflow-y: auto; -webkit-overflow-scrolling: touch;}
+        .settings-drawer.open { bottom: 0; }
+        .drawer-header { display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.2); font-weight: bold;}
+        .drawer-section { padding: 15px 20px; border-bottom: 1px solid rgba(128,128,128,0.1); }
+        .section-title { font-size: 13px; color: #888; margin-bottom: 10px; }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap;}
+        .tool-btn { flex: 1; padding: 10px; background: var(--bg-color); border: 1px solid rgba(128,128,128,0.2); border-radius: 8px; font-size: 14px; cursor: pointer; color: var(--text-color); text-align: center; min-width: 60px;}
+        
+        .touch-zone { position: absolute; top: 50px; bottom: 0; width: 33.33%; z-index: 15; }
+        /* 上下滑动模式下：把三层透明翻页感应区关掉，否则手指滑动全被它们吃掉，正文根本滚不动 */
+        #reader-view.no-zones .touch-zone { display: none; }
+        .zone-left { left: 0; }
+        .zone-center { left: 33.33%; }
+
+        /* 右上角工具条：点一下正文才出现（« 上一章 / 设置 / » 下一章） */
+        #reader-tools {
+            position: fixed; top: 58px; right: 14px; z-index: 30;
+            display: none; gap: 8px;
+        }
+        #reader-tools.show { display: flex; }
+        #reader-tools button {
+            width: 38px; height: 38px; border: none; border-radius: 50%;
+            background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25); font-size: 17px; line-height: 1;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #reader-tools button:active { background: rgba(0,0,0,0.78); }
+
+        /* 底部操作面板：点正文出现，上一章 / 目录 / 下一章 */
+        #bottom-panel {
+            position: fixed; left: 12px; right: 12px; bottom: 62px; z-index: 28;
+            display: none; gap: 8px; padding: 8px; border-radius: 14px;
+            background: rgba(20,20,20,0.68); backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+        }
+        #bottom-panel.show { display: flex; }
+        #bottom-panel button {
+            flex: 1; padding: 11px 6px; border: none; border-radius: 10px;
+            background: rgba(255,255,255,0.15); color: #fff; font-size: 13px;
+            cursor: pointer; -webkit-tap-highlight-color: transparent;
+        }
+        #bottom-panel button:active { background: rgba(255,255,255,0.32); }
+
+        /* 底部小提示条（代替弹窗，不打断） */
+        #toast {
+            position: fixed; left: 50%; bottom: 92px; transform: translate(-50%, 10px);
+            background: rgba(0,0,0,0.78); color: #fff; padding: 9px 16px; border-radius: 20px;
+            font-size: 13px; max-width: 80vw; text-align: center;
+            opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60;
+        }
+        #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+        /* 隐藏的测量框：只用来量"这一页能放多少字"，屏幕上看不见 */
+        #page-measure {
+            position: absolute; left: -9999px; top: 0; visibility: hidden;
+            pointer-events: none; overflow: hidden; white-space: pre-wrap;
+            margin: 0; padding: 0; border: 0;
+        }
+        .zone-right { right: 0; }
+        
+        .loading { text-align: center; padding: 20px; color: #666; width: 100%; }
+    </style>
+</head>
+<body>
+
+    <div class="header" id="main-header">
+        <span id="back-btn" class="header-btn" style="visibility: hidden;" onclick="goBack()">← 返回</span>
+        <span id="header-title" style="flex:1; text-align:center; padding-right:70px; display:flex; justify-content:center; align-items:center;">
+            阅读器 <span id="audio-indicator" class="audio-status">🔊 播放中</span>
+        </span>
+    </div>
+
+    <div id="store-view" class="view-section" style="display: block;">
+        <div class="book-list" id="store-list"><div class="loading">正在加载书城...</div></div>
+    </div>
+
+    <div id="shelf-view" class="view-section">
+        <div class="book-list" id="shelf-list"><div class="loading">书架空空如也，快去书城加书吧~</div></div>
+    </div>
+
+    <div id="detail-view">
+        <h2 id="detail-title" style="padding: 20px 15px 10px; font-size: 20px;"></h2>
+        <ul class="chapter-list" id="chapter-list"></ul>
+    </div>
+
+    <div id="reader-view" style="position: relative;">
+        <h2 id="chapter-title" style="position: absolute; top: 50px; width: 100%; text-align: center; z-index: 5; font-size: 16px; color: #888; pointer-events: none;"></h2>
+        
+        <div class="content-box" id="chapter-content">正在加载正文...</div>
+        
+        <div id="reader-tools">
+            <button id="prev-chapter-btn" aria-label="上一章" onclick="chapterStep(-1)">«</button>
+            <button id="gear-btn" aria-label="阅读设置" onclick="gearClick(event)">
+                <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                    <circle cx="12" cy="12" r="3.3"/>
+                    <path d="M12 2.4v2.6M12 19v2.6M2.4 12h2.6M19 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/>
+                </svg>
+            </button>
+            <button id="next-chapter-btn" aria-label="下一章" onclick="chapterStep(1)">»</button>
+        </div>
+
+        <div class="touch-zone zone-left" onclick="handleScreenClick('left')"></div>
+        <div class="touch-zone zone-center" onclick="handleScreenClick('center')"></div>
+        <div class="touch-zone zone-right" onclick="handleScreenClick('right')"></div>
+        
+        <!-- 底部状态栏（平时隐藏，呼出菜单时显示，包含上一章/下一章） -->
+        <div class="footer-bar" id="footer-bar">
+            <button class="footer-btn" onclick="loadChapter(currentChapterIndex - 1, 1)">« 上一章</button>
+            <div class="footer-center">
+                <span id="page-indicator">1/1</span>
+            </div>
+            <button class="footer-btn" onclick="loadChapter(currentChapterIndex + 1, 1)">下一章 »</button>
+        </div>
+    </div>
+
+    <div class="bottom-nav" id="main-tabs">
+        <div class="nav-item active" onclick="switchTab('store')"><div class="nav-icon">🏠</div>书城</div>
+        <div class="nav-item" onclick="switchTab('shelf')"><div class="nav-icon">📚</div>书架</div>
+    </div>
+
+    <div id="page-measure"></div>
+
+    <div id="bottom-panel">
+        <button id="panel-prev" onclick="chapterStep(-1)">« 上一章</button>
+        <button id="panel-catalog" onclick="openCatalogFromReader()">☰ 目录</button>
+        <button id="panel-next" onclick="chapterStep(1)">下一章 »</button>
+    </div>
+
+    <div class="settings-drawer" id="settings-drawer">
+        <div class="drawer-header">
+            <span>阅读设置</span>
+            <span class="close-drawer" onclick="toggleSettingsDrawer()">×</span>
+        </div>
+        <div class="drawer-section">
+            <div class="section-title">语音朗读</div>
+            <div class="btn-group">
+                <button class="tool-btn" id="speech-btn" onclick="toggleSpeech()" style="flex: 100%; background: var(--theme-color); color: white;">▶ 开始听书</button>
+            </div>
+        </div>
+        <div class="drawer-section">
+            <div class="section-title">背景与主题</div>
+            <div class="btn-group">
+                <button class="tool-btn" onclick="setTheme('')">默认白</button>
+                <button class="tool-btn" style="background:#f7e8c6; color:#5b4636;" onclick="setTheme('theme-sepia')">护眼黄</button>
+                <button class="tool-btn" style="background:#cce8cf; color:#2b4b36;" onclick="setTheme('theme-green')">清新绿</button>
+                <button class="tool-btn" style="background:#1a1a1a; color:#999;" onclick="setTheme('theme-dark')">夜间黑</button>
+            </div>
+        </div>
+        <div class="drawer-section">
+            <div class="section-title">字体大小</div>
+            <div class="btn-group">
+                <button class="tool-btn" onclick="changeFontSize(-1)">A- 缩小</button>
+                <button class="tool-btn" onclick="changeFontSize(1)">A+ 放大</button>
+            </div>
+        </div>
+        <div class="drawer-section">
+            <div class="section-title">离线缓存（加载慢就点这个）</div>
+            <div class="btn-group">
+                <button class="tool-btn" id="cache-btn" onclick="cacheWholeBook()" style="flex: 100%; background: var(--theme-color); color: white;">📥 缓存全书</button>
+                <button class="tool-btn" onclick="clearCache()">清空缓存</button>
+            </div>
+            <div id="cache-status" style="margin-top: 10px; font-size: 12px; color: #888;">—</div>
+        </div>
+        <div class="drawer-section">
+            <div class="section-title">翻页方式</div>
+            <div class="btn-group">
+                <button class="tool-btn" onclick="setPageMode('scroll')">上下滑动</button>
+                <button class="tool-btn" onclick="setPageMode('slide')">左右平移</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/wwww0205/reading-app/main/";
+        const FALLBACK_URL = "https://cdn.jsdelivr.net/gh/wwww0205/reading-app@main/";
+        
+        let allBooks = [];
+        let currentBook = null;
+        let currentCatalog = [];
+        let currentChapterIndex = -1;
+        
+        let currentFontSize = parseInt(localStorage.getItem("read_font")) || 17;
+        let currentTheme = localStorage.getItem("read_theme") || '';
+        let currentPageMode = localStorage.getItem("read_page") || 'slide'; 
+
+        let isSpeaking = false;
+        let synth = (typeof window.speechSynthesis !== 'undefined') ? window.speechSynthesis : null;
+        let currentUtterance = null;
+
+        let fullText = "";
+        let totalPages = 1;
+        let currentPage = 1;
+        let pageStarts = [0];   // 每一页的起始字符下标
+
+        document.body.className = currentTheme;
+        document.getElementById("chapter-content").style.fontSize = currentFontSize + "px";
+
+        function getFreshUrl(base, path) {
+            // 只有"数据清单"需要每次取最新（改了要立刻生效）；
+            // 图片和正文不用：不加时间戳，浏览器和 CDN 才能把它缓存住，第二次就秒开
+            const needFresh = /\.json(\?|$)/.test(path);
+            return base + path + (needFresh ? "?t=" + new Date().getTime() : "");
+        }
+        function getShelf() { let shelf = localStorage.getItem("my_shelf"); return shelf ? JSON.parse(shelf) : []; }
+        function addToShelf(id) { let s = getShelf(); if(!s.includes(id)){ s.push(id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("store-btn-" + id).className = "app-btn btn-added"; document.getElementById("store-btn-" + id).innerText = "已在书架"; renderShelfOnly(); } }
+        function removeFromShelf(id) { let s = getShelf().filter(i => i !== id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("shelf-btn-" + id).className = "app-btn btn-add"; document.getElementById("shelf-btn-" + id).innerText = "+ 加入书架"; document.getElementById("shelf-btn-" + id).onclick = function() { addToShelf(id); }; let sb = document.getElementById("store-btn-" + id); if(sb) { sb.className = "app-btn btn-add"; sb.innerText = "+ 加入书架"; sb.onclick = function() { addToShelf(id); }; } renderShelfOnly(); }
+        function getProgress(id) { return localStorage.getItem("progress_" + id); }
+        function saveProgress(id, index) { localStorage.setItem("progress_" + id, index); }
+
+        function switchTab(tab) {
+            document.getElementById('main-tabs').style.display = 'flex';
+            document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+            if (tab === 'store') {
+                document.querySelectorAll('.nav-item')[0].classList.add('active');
+                document.getElementById("store-view").style.display = "block";
+                document.getElementById("shelf-view").style.display = "none";
+                setHeaderTitle("书城");
+            } else {
+                document.querySelectorAll('.nav-item')[1].classList.add('active');
+                document.getElementById("store-view").style.display = "none";
+                document.getElementById("shelf-view").style.display = "block";
+                setHeaderTitle("书架");
+            }
+        }
+
+        async function loadStore() {
+            // 先用本地缓存立刻显示，再去网上静默更新 —— 打开不用干等
+            const cached = localStorage.getItem("cache_store");
+            if (cached) {
+                try { allBooks = JSON.parse(cached); renderBooks(); } catch (e) {}
+            }
+            let fetched = false;
+            try {
+                const res = await fetch(getFreshUrl(BASE_URL, "store.json"));
+                allBooks = await res.json();
+                fetched = true;
+            } catch (e) {
+                try {
+                    const res = await fetch(getFreshUrl(FALLBACK_URL, "store.json"));
+                    allBooks = await res.json();
+                    fetched = true;
+                } catch (err) { fetched = false; }
+            }
+            if (fetched) {
+                try { localStorage.setItem("cache_store", JSON.stringify(allBooks)); } catch (e) {}
+                renderBooks();
+            } else if (!cached) {
+                document.getElementById("store-list").innerHTML = `<div class="loading">加载失败，请检查网络。</div>`;
+            }
+        }
+
+        function renderBooks() {
+            const shelfIds = getShelf();
+            const storeList = document.getElementById("store-list");
+            storeList.innerHTML = "";
+            if (allBooks.length === 0) return;
+
+            allBooks.forEach(book => {
+                const isAdded = shelfIds.includes(book.id);
+                const progress = getProgress(book.id);
+                const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
+                const imgUrl = getFreshUrl(FALLBACK_URL, book.cover);      // 封面优先走 jsDelivr（有缓存）
+                const imgFallback = getFreshUrl(BASE_URL, book.cover);     // 备胎 ghproxy
+                
+                const storeItem = document.createElement("div");
+                storeItem.className = "book-item";
+                let btnHTML = isAdded ? `<button class="app-btn btn-added" id="store-btn-${book.id}">已在书架</button>` : `<button class="app-btn btn-add" id="store-btn-${book.id}" data-action="add" data-book-id="${book.id}">+ 加入书架</button>`;
+
+                storeItem.innerHTML = `
+                    <div class="book-cover-box" data-book-id="${book.id}">
+                        ${badge}
+                        <img src="${imgUrl}" onerror="this.src='${imgFallback}'; this.onerror=null;">
+                        <div class="book-info">
+                            <div class="book-title">${book.title}</div>
+                            <div class="book-author">${book.author}</div>
+                        </div>
+                    </div>
+                    ${btnHTML}
+                `;
+                storeList.appendChild(storeItem);
+            });
+            renderShelfOnly();
+        }
+
+        function renderShelfOnly() {
+            const shelfIds = getShelf();
+            const shelfList = document.getElementById("shelf-list");
+            shelfList.innerHTML = "";
+            allBooks.forEach(book => {
+                if (shelfIds.includes(book.id)) {
+                    const progress = getProgress(book.id);
+                    const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
+                    const imgUrl = getFreshUrl(FALLBACK_URL, book.cover);      // 封面优先走 jsDelivr（有缓存）
+                    const imgFallback = getFreshUrl(BASE_URL, book.cover);     // 备胎 ghproxy
+                    const shelfItem = document.createElement("div");
+                    shelfItem.className = "book-item";
+                    shelfItem.innerHTML = `
+                        <div class="book-cover-box" data-book-id="${book.id}">
+                            ${badge}
+                            <img src="${imgUrl}" onerror="this.src='${imgFallback}'; this.onerror=null;">
+                            <div class="book-info">
+                                <div class="book-title">${book.title}</div>
+                                <div class="book-author">${book.author}</div>
+                            </div>
+                        </div>
+                        <button class="app-btn btn-remove" id="shelf-btn-${book.id}" data-action="remove" data-book-id="${book.id}">移出书架</button>
+                    `;
+                    shelfList.appendChild(shelfItem);
+                }
+            });
+            if (shelfList.children.length === 0) shelfList.innerHTML = "<div class='loading'>书架空空如也~</div>";
+        }
+
+        async function openBook(bookId) {
+            currentBook = allBooks.find(b => b.id === bookId);
+            if (!currentBook) return;
+            stopSpeech();
+            
+            document.getElementById("store-view").style.display = "none";
+            document.getElementById("shelf-view").style.display = "none";
+            document.getElementById("main-tabs").style.display = "none";
+            document.getElementById("detail-view").style.display = "block";
+            setHeaderTitle("目录");
+            document.getElementById("back-btn").style.visibility = "visible";
+            document.getElementById("detail-title").innerText = currentBook.title;
+            
+            const list = document.getElementById("chapter-list");
+            list.innerHTML = "<div class='loading'>正在加载目录...</div>";
+            history.pushState({ page: 'catalog' }, '');
+
+            try {
+                const res = await fetch(getFreshUrl(BASE_URL, currentBook.folder + "/catalog.json"));
+                const catalog = await res.json();
+                try { localStorage.setItem("cache_catalog_" + currentBook.id, JSON.stringify(catalog)); } catch (e2) {}
+                renderChapters(catalog);
+            } catch (e) {
+                try {
+                    const res = await fetch(getFreshUrl(FALLBACK_URL, currentBook.folder + "/catalog.json"));
+                    const catalog = await res.json();
+                    try { localStorage.setItem("cache_catalog_" + currentBook.id, JSON.stringify(catalog)); } catch (e2) {}
+                    renderChapters(catalog);
+                } catch (err) {
+                    // 断网时用本地存的目录，照样能进书
+                    const cachedCat = localStorage.getItem("cache_catalog_" + currentBook.id);
+                    if (cachedCat) {
+                        try { renderChapters(JSON.parse(cachedCat)); return; } catch (e3) {}
+                    }
+                    list.innerHTML = "<div class='loading'>目录加载失败。</div>";
+                }
+            }
+        }
+
+        function renderChapters(catalog) {
+            const list = document.getElementById("chapter-list");
+            currentCatalog = catalog.chapters;
+            list.innerHTML = "";
+            currentCatalog.forEach((chap, index) => {
+                const li = document.createElement("li");
+                li.className = "chapter-item";
+                li.innerText = chap.title;
+                if (getProgress(currentBook.id) == index) { li.style.color = "var(--theme-color)"; li.innerText += " (上次读到)"; }
+                li.onclick = () => loadChapter(index, 1);
+                list.appendChild(li);
+            });
+        }
+
+        async function loadChapter(index, pageToGo) {
+            if (index < 0) { alert("已经是第一章了！"); return; }
+            if (index >= currentCatalog.length) { alert("已经是最后一章了！"); return; }
+            
+            currentChapterIndex = index;
+            currentPage = pageToGo || 1;
+            const chap = currentCatalog[index];
+            saveProgress(currentBook.id, index);
+
+            document.getElementById("detail-view").style.display = "none";
+            document.getElementById("reader-view").style.display = "block";
+            setHeaderTitle("阅读");
+            document.getElementById("chapter-title").innerText = chap.title;
+
+            const contentDiv = document.getElementById("chapter-content");
+            const chapterUrl = currentBook.folder + "/" + chap.file;
+            const cacheKey = "cache_" + currentBook.id + "_" + index;
+            
+            contentDiv.innerText = "正在加载正文...";
+
+            let text = localStorage.getItem(cacheKey);
+            if (!text) {
+                try {
+                    const res = await fetch(getFreshUrl(BASE_URL, chapterUrl));
+                    text = await res.text();
+                    localStorage.setItem(cacheKey, text);
+                } catch (e) {
+                    try {
+                        const res = await fetch(getFreshUrl(FALLBACK_URL, chapterUrl));
+                        text = await res.text();
+                        localStorage.setItem(cacheKey, text);
+                    } catch (err) { contentDiv.innerText = "正文加载失败。"; return; }
+                }
+            }
+            fullText = text;
+            applyPagination(); 
+        }
+
+        function applyPagination() {
+            hideGear();   // 换章/切模式时先把齿轮收起来
+            const contentDiv = document.getElementById("chapter-content");
+            const footer = document.getElementById("footer-bar");
+            const readerView = document.getElementById("reader-view");
+            
+            // 如果选了上下滑动模式
+            if (currentPageMode === 'scroll') {
+                readerView.classList.remove("paged-mode");
+                readerView.classList.add("no-zones");   // 关掉透明感应区，恢复手指滚动
+                footer.style.display = "none"; // 滑动模式隐藏底部栏
+                const bp2 = document.getElementById("bottom-panel");
+                if (bp2) bp2.style.bottom = "20px";   // 滑动模式底部没有切章栏，面板贴近底边
+                contentDiv.style.height = "";      // 还原成 CSS 里的高度
+                contentDiv.style.marginTop = "";
+                contentDiv.innerText = fullText;
+                contentDiv.scrollTop = 0;
+                return;
+            }
+
+            // 左右平移模式，开启分页
+            readerView.classList.remove("no-zones");
+            readerView.classList.add("paged-mode");
+            footer.style.display = "flex"; // 显示底部栏（切章+页码）
+            
+            contentDiv.style.fontSize = currentFontSize + "px";
+
+            // 手机浏览器的 100vh 会把底部工具栏一起算进去，导致最后一行藏到工具栏底下被切一半。
+            // 这里直接量"真正看得见的高度"，再留 6px 安全余量。
+            const visH = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+            const headerH = 50;
+            const footerH = 50;   // 分页模式底部切章栏一直显示
+            const boxH = Math.max(180, Math.round(visH - headerH - footerH - 6));
+            contentDiv.style.height = boxH + "px";
+            contentDiv.style.marginTop = headerH + "px";
+
+            const bp = document.getElementById("bottom-panel");
+            if (bp) bp.style.bottom = "62px";   // 分页模式下面有切章栏，面板往上让一让
+
+            pageStarts = computePageStarts();
+            totalPages = Math.max(1, pageStarts.length - 1);
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            renderPage();
+        }
+
+        function renderPage() {
+            if (currentPageMode === 'scroll') return;
+            const contentDiv = document.getElementById("chapter-content");
+            const ind = document.getElementById("page-indicator");
+
+            if (!pageStarts || pageStarts.length < 2) {
+                contentDiv.innerText = fullText;
+            } else {
+                const from = pageStarts[currentPage - 1] || 0;
+                const to = (currentPage < pageStarts.length) ? pageStarts[currentPage] : fullText.length;
+                contentDiv.innerText = fullText.slice(from, to);
+            }
+            contentDiv.scrollTop = 0;
+            if (ind) ind.innerText = `${currentPage} / ${totalPages}`;
+        }
+
+        function handleScreenClick(zone) {
+            // 刚做了一次左右滑动，紧接着的 click 是余波，忽略，别再翻一页
+            if (window.__justSwiped && Date.now() - window.__justSwiped < 400) return;
+            if (document.getElementById("settings-drawer").classList.contains('open')) {
+                toggleSettingsDrawer();
+                return;
+            }
+
+            if (currentPageMode === 'scroll') {
+                showGear();          // 点一下正文：只让齿轮冒头，不弹面板
+            } else {
+                if (zone === 'left') {
+                    flipPage('prev');
+                } else if (zone === 'right') {
+                    flipPage('next');
+                } else {
+                    showGear();      // 点屏幕中间：同样是唤出齿轮
+                }
+            }
+        }
+
+        function flipPage(direction) {
+            hideTools();   // 翻页就把操作面板收起来
+            const contentDiv = document.getElementById("chapter-content");
+
+            if (direction === 'next') {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    contentDiv.classList.add('page-anim-right');
+                    setTimeout(() => contentDiv.classList.remove('page-anim-right'), 220);
+                    renderPage();
+                } else {
+                    // 到本章最后一页：不自动跳章，把切章按钮亮出来让人自己决定
+                    showTools();
+                    toast("本章已读完，点右上角「»」进下一章");
+                }
+            } else if (direction === 'prev') {
+                if (currentPage > 1) {
+                    currentPage--;
+                    contentDiv.classList.add('page-anim-left');
+                    setTimeout(() => contentDiv.classList.remove('page-anim-left'), 220);
+                    renderPage();
+                } else {
+                    showTools();
+                    toast("已是本章第一页，点右上角「«」回上一章");
+                }
+            }
+        }
+
+        // 安全地改顶部标题：不会顺手把里面的"🔊 播放中"小标签删掉
+        function setHeaderTitle(text) {
+            const h = document.getElementById("header-title");
+            if (!h) return;
+            h.innerText = text;
+            let ind = document.getElementById("audio-indicator");
+            if (!ind) {
+                ind = document.createElement("span");
+                ind.id = "audio-indicator";
+                ind.className = "audio-status";
+                ind.innerText = "🔊 播放中";
+            }
+            ind.style.display = "none";
+            h.appendChild(ind);
+        }
+
+        function goBack() {
+            document.getElementById("settings-drawer").classList.remove("open");
+            document.getElementById("main-header").classList.remove("hidden");
+            stopSpeech();
+
+            if (document.getElementById("reader-view").style.display === "block") {
+                document.getElementById("reader-view").style.display = "none";
+                document.getElementById("detail-view").style.display = "block";
+                setHeaderTitle("目录");
+            } else if (document.getElementById("detail-view").style.display === "block") {
+                document.getElementById("detail-view").style.display = "none";
+                document.getElementById("main-tabs").style.display = "flex";
+                document.getElementById("back-btn").style.visibility = "hidden";
+                switchTab('store'); 
+            }
+        }
+
+        window.addEventListener('popstate', function(e) { goBack(); });
+
+        // ---------- 阅读操作层：右上角工具条 + 底部面板，一起出现一起收 ----------
+        function panelsVisible() {
+            const t = document.getElementById("reader-tools");
+            return !!(t && t.classList.contains("show"));
+        }
+        function showTools() {
+            const t = document.getElementById("reader-tools");
+            const p = document.getElementById("bottom-panel");
+            if (t) t.classList.add("show");
+            if (p) p.classList.add("show");
+            // 4 秒没动作就自动收起，免得一直盖着正文
+            clearTimeout(window.__panelTimer);
+            window.__panelTimer = setTimeout(hideTools, 4000);
+        }
+        function hideTools() {
+            const t = document.getElementById("reader-tools");
+            const p = document.getElementById("bottom-panel");
+            if (t) t.classList.remove("show");
+            if (p) p.classList.remove("show");
+            clearTimeout(window.__panelTimer);
+        }
+        function toggleTools() {
+            panelsVisible() ? hideTools() : showTools();
+        }
+
+        // 底部面板的「目录」：回到这本书的章节目录页
+        function openCatalogFromReader() {
+            hideTools();
+            goBack();
+        }
+        // 旧函数名保留（别处还在调用），行为统一：控制整个工具条
+        function showGear() { showTools(); }
+        function hideGear() { hideTools(); }
+        function toggleGear() { toggleTools(); }
+
+        // 点齿轮：收起工具条，弹出设置面板
+        function gearClick(e) {
+            if (e) e.stopPropagation();
+            hideTools();
+            const drawer = document.getElementById("settings-drawer");
+            if (!drawer.classList.contains("open")) toggleSettingsDrawer();
+        }
+
+        // 工具条上的切章：-1 上一章 / +1 下一章
+        function chapterStep(dir) {
+            hideTools();
+            const target = currentChapterIndex + dir;
+            if (target < 0) { toast("已经是第一章了"); return; }
+            if (target >= currentCatalog.length) { toast("已经是最后一章了"); return; }
+            loadChapter(target, dir > 0 ? 1 : 9999);
+        }
+
+        // 底部小提示，不打断阅读
+        function toast(msg) {
+            let t = document.getElementById("toast");
+            if (!t) {
+                t = document.createElement("div");
+                t.id = "toast";
+                document.body.appendChild(t);
+            }
+            t.textContent = msg;
+            t.classList.add("show");
+            clearTimeout(window.__toastTimer);
+            window.__toastTimer = setTimeout(function () { t.classList.remove("show"); }, 1800);
+        }
+
+        // ---------- 离线缓存：一次性把所有章节存到手机里 ----------
+        function cacheKeyOf(bookId, index) { return "cache_" + bookId + "_" + index; }
+
+        function cacheStats(book) {
+            const total = currentCatalog ? currentCatalog.length : 0;
+            let done = 0;
+            for (let i = 0; i < total; i++) {
+                if (localStorage.getItem(cacheKeyOf(book.id, i))) done++;
+            }
+            return { done: done, total: total };
+        }
+
+        function updateCacheStatus() {
+            const st = document.getElementById("cache-status");
+            if (!st) return;
+            const book = currentBook || allBooks[0];
+            if (!book || !currentCatalog || !currentCatalog.length) {
+                st.textContent = "打开一本书之后就能缓存";
+                return;
+            }
+            const s = cacheStats(book);
+            if (s.total === 0) { st.textContent = "这本书还没有章节"; return; }
+            st.textContent = (s.done >= s.total)
+                ? `已缓存全部 ${s.total} 章，没网也能看`
+                : `已缓存 ${s.done} / ${s.total} 章`;
+        }
+
+        async function cacheWholeBook() {
+            const book = currentBook || allBooks[0];
+            if (!book) { toast("先打开一本书"); return; }
+            if (!currentCatalog || !currentCatalog.length) { toast("先在目录页点进一章，再来缓存"); return; }
+
+            const btn = document.getElementById("cache-btn");
+            const st = document.getElementById("cache-status");
+            if (btn) { btn.disabled = true; btn.textContent = "缓存中…"; }
+
+            let ok = 0, fail = 0;
+            for (let i = 0; i < currentCatalog.length; i++) {
+                const key = cacheKeyOf(book.id, i);
+                if (st) st.textContent = `正在缓存… ${i + 1} / ${currentCatalog.length}`;
+                if (!localStorage.getItem(key)) {
+                    const url = book.folder + "/" + currentCatalog[i].file;
+                    let text = null;
+                    try {
+                        const r = await fetch(getFreshUrl(BASE_URL, url));
+                        if (r.ok) text = await r.text();
+                    } catch (e1) {}
+                    if (!text) {
+                        try {
+                            const r = await fetch(getFreshUrl(FALLBACK_URL, url));
+                            if (r.ok) text = await r.text();
+                        } catch (e2) {}
+                    }
+                    if (text) {
+                        try { localStorage.setItem(key, text); } catch (e3) {
+                            if (st) st.textContent = `手机存储空间不够，缓存到第 ${i + 1} 章就满了`;
+                            if (btn) { btn.disabled = false; btn.textContent = "📥 缓存全书"; }
+                            return;
+                        }
+                    } else { fail++; }
+                }
+                ok++;
+            }
+            if (btn) { btn.disabled = false; btn.textContent = "📥 缓存全书"; }
+            updateCacheStatus();
+            toast(fail ? `缓存完成，有 ${fail} 章没下载成功` : "缓存完成，之后没网也能看");
+        }
+
+        function clearCache() {
+            const book = currentBook || allBooks[0];
+            if (!book) { toast("先打开一本书"); return; }
+            const total = (currentCatalog && currentCatalog.length) ? currentCatalog.length : 50;
+            for (let i = 0; i < total + 5; i++) localStorage.removeItem(cacheKeyOf(book.id, i));
+            updateCacheStatus();
+            toast("已清空这本书的缓存");
+        }
+
+        // ---------- 左右滑动手势（真的能滑，不只是点） ----------
+        function bindSwipe() {
+            const rv = document.getElementById("reader-view");
+            if (!rv) return;
+            let sx = 0, sy = 0, active = false;
+
+            rv.addEventListener('touchstart', function (e) {
+                if (currentPageMode !== 'slide') return;
+                if (!e.touches || !e.touches.length) return;
+                sx = e.touches[0].clientX;
+                sy = e.touches[0].clientY;
+                active = true;
+            }, { passive: true });
+
+            rv.addEventListener('touchend', function (e) {
+                if (!active || currentPageMode !== 'slide') return;
+                active = false;
+                const t = e.changedTouches[0];
+                const dx = t.clientX - sx;
+                const dy = t.clientY - sy;
+                if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+                    window.__justSwiped = Date.now();   // 标记一下，别让这次的 click 再翻一页
+                    flipPage(dx < 0 ? 'next' : 'prev');
+                }
+            }, { passive: true });
+        }
+
+        // ---------- 真正的分页：拿尺子量，不再猜字数 ----------
+        // 返回每页的起始下标，例如 [0, 320, 655, 全文长度]
+        function computePageStarts() {
+            const contentDiv = document.getElementById("chapter-content");
+            const m = document.getElementById("page-measure");
+            const text = fullText || "";
+            if (!m || !text) return [0, text.length];
+
+            const cs = getComputedStyle(contentDiv);
+            const padL = parseFloat(cs.paddingLeft) || 0;
+            const padR = parseFloat(cs.paddingRight) || 0;
+            const padT = parseFloat(cs.paddingTop) || 0;
+            const padB = parseFloat(cs.paddingBottom) || 0;
+            // 正文真正能用的宽和高（扣掉内边距）
+            const innerW = Math.max(80, contentDiv.clientWidth - padL - padR);
+            const innerH = Math.max(60, contentDiv.clientHeight - padT - padB);
+
+            // 让测量框的字体、行高、换行规则跟正文完全一致
+            m.style.width = innerW + "px";
+            m.style.fontSize = cs.fontSize;
+            m.style.fontFamily = cs.fontFamily;
+            m.style.lineHeight = cs.lineHeight;
+            m.style.letterSpacing = cs.letterSpacing;
+            m.style.whiteSpace = "pre-wrap";
+            m.style.wordBreak = "break-word";
+            m.style.boxSizing = "content-box";
+
+            const lineH = parseFloat(cs.lineHeight) || (currentFontSize * 1.8);
+            const fontPx = parseFloat(cs.fontSize) || currentFontSize;
+            // 粗估一页字数，只用来给二分查找缩小范围，不直接拿来分页
+            const estimate = Math.max(80, Math.floor((innerH / lineH) * (innerW / fontPx)));
+
+            const n = text.length;
+            const starts = [0];
+            let start = 0;
+            let guard = 0;
+
+            while (start < n && guard++ < 5000) {
+                let lo = start + 1;
+                let hi = Math.min(n, start + estimate * 3);
+                let best = start + 1;
+
+                // 二分查找：能完整塞进一页的最多字数
+                while (lo <= hi) {
+                    const mid = (lo + hi) >> 1;
+                    m.textContent = text.slice(start, mid);
+                    if (m.scrollHeight <= innerH) { best = mid; lo = mid + 1; }
+                    else { hi = mid - 1; }
+                }
+
+                let end = best;
+                // 尽量断在句号或换行处，别把一句话拦腰砍断
+                if (end < n) {
+                    const limit = Math.max(start + 1, end - 40);
+                    for (let i = end; i > limit; i--) {
+                        if ("。！？；…”」\n".indexOf(text[i - 1]) >= 0) { end = i; break; }
+                    }
+                }
+                if (end <= start) end = start + 1;
+                starts.push(end);
+                start = end;
+            }
+            m.textContent = "";
+            return starts;
+        }
+
+        function toggleSettingsDrawer() {
+            const drawer = document.getElementById("settings-drawer");
+            const header = document.getElementById("main-header");
+            const footer = document.getElementById("footer-bar");
+            
+            if (drawer.classList.contains("open")) {
+                drawer.classList.remove("open");
+                header.classList.remove("hidden");
+                // 如果是分页模式，隐藏底部切章栏
+                if(currentPageMode === 'slide') footer.style.bottom = "-100px"; 
+            } else {
+                hideGear();
+                updateCacheStatus();
+                drawer.classList.add("open");
+                header.classList.add("hidden");
+                // 呼出菜单时，顺便把底部切章栏也顶上来
+                if(currentPageMode === 'slide') footer.style.bottom = "0";
+            }
+        }
+
+        // 初始化底部栏状态
+        if(currentPageMode === 'slide') document.getElementById("footer-bar").style.bottom = "-100px";
+
+        function setTheme(themeName) {
+            currentTheme = themeName;
+            document.body.className = currentTheme;
+            localStorage.setItem("read_theme", currentTheme);
+        }
+
+        function changeFontSize(step) {
+            currentFontSize += step * 2;
+            if (currentFontSize < 12) currentFontSize = 12;
+            if (currentFontSize > 30) currentFontSize = 30;
+            document.getElementById("chapter-content").style.fontSize = currentFontSize + "px";
+            localStorage.setItem("read_font", currentFontSize);
+            
+            if (currentPageMode === 'slide') {
+                applyPagination();
+            }
+        }
+
+        function setPageMode(mode) {
+            currentPageMode = mode;
+            localStorage.setItem("read_page", mode);
+            currentPage = 1; 
+            applyPagination();
+            toggleSettingsDrawer();
+        }
+
+        function toggleSpeech() {
+            if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+                alert("这个浏览器不支持听书（缺语音朗读功能）。换 Chrome 或 Safari 可以，听书先跳过~");
+                return;
+            }
+            const textToRead = fullText; 
+            const btn = document.getElementById("speech-btn");
+            const indicator = document.getElementById("audio-indicator");
+
+            if (isSpeaking) { stopSpeech(); return; }
+
+            if (textToRead && textToRead !== "正在加载正文...") {
+                currentUtterance = new SpeechSynthesisUtterance(textToRead);
+                currentUtterance.lang = 'zh-CN';
+                currentUtterance.rate = 1.0;
+                // 尽量挑一个中文发音人，没有就用系统默认
+                try {
+                    const voices = (synth.getVoices ? synth.getVoices() : []) || [];
+                    const zh = voices.find(v => v.lang && v.lang.toLowerCase().indexOf('zh') === 0);
+                    if (zh) currentUtterance.voice = zh;
+                } catch (e) {}
+                currentUtterance.onend = function() {
+                    isSpeaking = false;
+                    if (btn) { btn.innerText = "▶ 开始听书"; btn.style.background = "var(--theme-color)"; }
+                    const ind2 = document.getElementById("audio-indicator");
+                    if (ind2) ind2.style.display = "none";
+                };
+                synth.speak(currentUtterance);
+                isSpeaking = true;
+                if (btn) { btn.innerText = "⏹ 停止朗读"; btn.style.background = "#d32f2f"; }
+                if (indicator) indicator.style.display = "inline-block";
+                // 1.5 秒还没出声，说明这台手机/这个浏览器没有可用的语音引擎
+                setTimeout(function () {
+                    if (!isSpeaking) return;
+                    const alive = synth.speaking || synth.pending;
+                    if (!alive) {
+                        stopSpeech();
+                        alert("这个浏览器里没有能出声的语音引擎，所以听书是哑的（不是代码坏了）。\n办法：去手机「设置」搜「文字转语音 / TTS」装一个语音引擎；或者换 Chrome 打开试试。");
+                    }
+                }, 1500);
+            } else { alert("正文还没加载出来呢！"); }
+        }
+
+        function stopSpeech() {
+            if (synth && synth.speaking) synth.cancel();
+            isSpeaking = false;
+            const btn = document.getElementById("speech-btn");
+            const indicator = document.getElementById("audio-indicator");
+            if(btn) { btn.innerText = "▶ 开始听书"; btn.style.background = "var(--theme-color)"; }
+            if(indicator) indicator.style.display = "none";
+        }
+
+        // 统一点击入口：不依赖内联 onclick，出错会明确弹窗，不会再"点了没反应"
+        function bindGlobalClicks() {
+            document.addEventListener('click', function (e) {
+                const el = e.target.closest('[data-book-id]');
+                if (!el) return;
+                const id = el.getAttribute('data-book-id');
+                const action = el.getAttribute('data-action');
+                try {
+                    if (action === 'add') { addToShelf(id); return; }
+                    if (action === 'remove') { removeFromShelf(id); return; }
+                    if (el.classList.contains('book-cover-box')) {
+                        Promise.resolve(openBook(id)).catch(function (err) {
+                            alert('点书出错：' + (err && err.message ? err.message : err) + '\n把这句话截图发给 AI，就能对症下药地修。');
+                            console.error(err);
+                        });
+                    }
+                } catch (err) {
+                    alert('点击出错：' + (err && err.message ? err.message : err));
+                    console.error(err);
+                }
+            });
+        }
+
+        window.onload = function () {
+            bindGlobalClicks();
+            bindSwipe();
+            function relayout() {
+                clearTimeout(window.__resizeTimer);
+                window.__resizeTimer = setTimeout(function () {
+                    if (currentPageMode === 'slide' && fullText) applyPagination();
+                }, 250);
+            }
+            window.addEventListener('resize', relayout);
+            window.addEventListener('orientationchange', relayout);
+            if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
+            // 滑动模式下遮罩已关掉，用"点一下正文"来唤出设置面板；拖动不会触发 click，所以不影响滚动
+            const contentDiv = document.getElementById("chapter-content");
+            if (contentDiv) {
+                contentDiv.addEventListener('click', function () {
+                    if (currentPageMode !== 'scroll') return;
+                    const drawer = document.getElementById("settings-drawer");
+                    if (drawer.classList.contains("open")) { toggleSettingsDrawer(); return; }
+                    toggleGear();          // 点正文：操作面板出现/收起
+                });
+            }
+            loadStore();
+        };
+    </script>
+</body>
+</html>
