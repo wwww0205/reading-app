@@ -183,7 +183,7 @@
         let currentPageMode = localStorage.getItem("read_page") || 'slide'; 
 
         let isSpeaking = false;
-        let synth = window.speechSynthesis;
+        let synth = (typeof window.speechSynthesis !== 'undefined') ? window.speechSynthesis : null;
         let currentUtterance = null;
 
         let fullText = "";
@@ -207,12 +207,12 @@
                 document.querySelectorAll('.nav-item')[0].classList.add('active');
                 document.getElementById("store-view").style.display = "block";
                 document.getElementById("shelf-view").style.display = "none";
-                document.getElementById("header-title").innerText = "书城";
+                setHeaderTitle("书城");
             } else {
                 document.querySelectorAll('.nav-item')[1].classList.add('active');
                 document.getElementById("store-view").style.display = "none";
                 document.getElementById("shelf-view").style.display = "block";
-                document.getElementById("header-title").innerText = "书架";
+                setHeaderTitle("书架");
             }
         }
 
@@ -245,10 +245,10 @@
                 
                 const storeItem = document.createElement("div");
                 storeItem.className = "book-item";
-                let btnHTML = isAdded ? `<button class="app-btn btn-added" id="store-btn-${book.id}">已在书架</button>` : `<button class="app-btn btn-add" id="store-btn-${book.id}" onclick="addToShelf('${book.id}')">+ 加入书架</button>`;
+                let btnHTML = isAdded ? `<button class="app-btn btn-added" id="store-btn-${book.id}">已在书架</button>` : `<button class="app-btn btn-add" id="store-btn-${book.id}" data-action="add" data-book-id="${book.id}">+ 加入书架</button>`;
 
                 storeItem.innerHTML = `
-                    <div class="book-cover-box" onclick="openBook('${book.id}')">
+                    <div class="book-cover-box" data-book-id="${book.id}">
                         ${badge}
                         <img src="${imgUrl}" onerror="this.src='${imgFallback}'; this.onerror=null;">
                         <div class="book-info">
@@ -276,7 +276,7 @@
                     const shelfItem = document.createElement("div");
                     shelfItem.className = "book-item";
                     shelfItem.innerHTML = `
-                        <div class="book-cover-box" onclick="openBook('${book.id}')">
+                        <div class="book-cover-box" data-book-id="${book.id}">
                             ${badge}
                             <img src="${imgUrl}" onerror="this.src='${imgFallback}'; this.onerror=null;">
                             <div class="book-info">
@@ -284,7 +284,7 @@
                                 <div class="book-author">${book.author}</div>
                             </div>
                         </div>
-                        <button class="app-btn btn-remove" id="shelf-btn-${book.id}" onclick="removeFromShelf('${book.id}')">移出书架</button>
+                        <button class="app-btn btn-remove" id="shelf-btn-${book.id}" data-action="remove" data-book-id="${book.id}">移出书架</button>
                     `;
                     shelfList.appendChild(shelfItem);
                 }
@@ -301,7 +301,7 @@
             document.getElementById("shelf-view").style.display = "none";
             document.getElementById("main-tabs").style.display = "none";
             document.getElementById("detail-view").style.display = "block";
-            document.getElementById("header-title").innerText = "目录";
+            setHeaderTitle("目录");
             document.getElementById("back-btn").style.visibility = "visible";
             document.getElementById("detail-title").innerText = currentBook.title;
             
@@ -347,7 +347,7 @@
 
             document.getElementById("detail-view").style.display = "none";
             document.getElementById("reader-view").style.display = "block";
-            document.getElementById("header-title").innerText = "阅读";
+            setHeaderTitle("阅读");
             document.getElementById("chapter-title").innerText = chap.title;
 
             const contentDiv = document.getElementById("chapter-content");
@@ -471,6 +471,22 @@
             }
         }
 
+        // 安全地改顶部标题：不会顺手把里面的"🔊 播放中"小标签删掉
+        function setHeaderTitle(text) {
+            const h = document.getElementById("header-title");
+            if (!h) return;
+            h.innerText = text;
+            let ind = document.getElementById("audio-indicator");
+            if (!ind) {
+                ind = document.createElement("span");
+                ind.id = "audio-indicator";
+                ind.className = "audio-status";
+                ind.innerText = "🔊 播放中";
+            }
+            ind.style.display = "none";
+            h.appendChild(ind);
+        }
+
         function goBack() {
             document.getElementById("settings-drawer").classList.remove("open");
             document.getElementById("main-header").classList.remove("hidden");
@@ -479,7 +495,7 @@
             if (document.getElementById("reader-view").style.display === "block") {
                 document.getElementById("reader-view").style.display = "none";
                 document.getElementById("detail-view").style.display = "block";
-                document.getElementById("header-title").innerText = "目录";
+                setHeaderTitle("目录");
             } else if (document.getElementById("detail-view").style.display === "block") {
                 document.getElementById("detail-view").style.display = "none";
                 document.getElementById("main-tabs").style.display = "flex";
@@ -538,6 +554,10 @@
         }
 
         function toggleSpeech() {
+            if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+                alert("这个浏览器不支持听书（缺语音朗读功能）。换 Chrome 或 Safari 可以，听书先跳过~");
+                return;
+            }
             const textToRead = fullText; 
             const btn = document.getElementById("speech-btn");
             const indicator = document.getElementById("audio-indicator");
@@ -548,16 +568,36 @@
                 currentUtterance = new SpeechSynthesisUtterance(textToRead);
                 currentUtterance.lang = 'zh-CN';
                 currentUtterance.rate = 1.0;
+                // 尽量挑一个中文发音人，没有就用系统默认
+                try {
+                    const voices = (synth.getVoices ? synth.getVoices() : []) || [];
+                    const zh = voices.find(v => v.lang && v.lang.toLowerCase().indexOf('zh') === 0);
+                    if (zh) currentUtterance.voice = zh;
+                } catch (e) {}
                 currentUtterance.onend = function() {
-                    isSpeaking = false; btn.innerText = "▶ 开始听书"; btn.style.background = "var(--theme-color)"; indicator.style.display = "none";
+                    isSpeaking = false;
+                    if (btn) { btn.innerText = "▶ 开始听书"; btn.style.background = "var(--theme-color)"; }
+                    const ind2 = document.getElementById("audio-indicator");
+                    if (ind2) ind2.style.display = "none";
                 };
                 synth.speak(currentUtterance);
-                isSpeaking = true; btn.innerText = "⏹ 停止朗读"; btn.style.background = "#d32f2f"; indicator.style.display = "inline-block";
+                isSpeaking = true;
+                if (btn) { btn.innerText = "⏹ 停止朗读"; btn.style.background = "#d32f2f"; }
+                if (indicator) indicator.style.display = "inline-block";
+                // 1.5 秒还没出声，说明这台手机/这个浏览器没有可用的语音引擎
+                setTimeout(function () {
+                    if (!isSpeaking) return;
+                    const alive = synth.speaking || synth.pending;
+                    if (!alive) {
+                        stopSpeech();
+                        alert("这个浏览器里没有能出声的语音引擎，所以听书是哑的（不是代码坏了）。\n办法：去手机「设置」搜「文字转语音 / TTS」装一个语音引擎；或者换 Chrome 打开试试。");
+                    }
+                }, 1500);
             } else { alert("正文还没加载出来呢！"); }
         }
 
         function stopSpeech() {
-            if (synth.speaking) synth.cancel();
+            if (synth && synth.speaking) synth.cancel();
             isSpeaking = false;
             const btn = document.getElementById("speech-btn");
             const indicator = document.getElementById("audio-indicator");
@@ -565,7 +605,30 @@
             if(indicator) indicator.style.display = "none";
         }
 
-        window.onload = loadStore;
+        // 统一点击入口：不依赖内联 onclick，出错会明确弹窗，不会再"点了没反应"
+        function bindGlobalClicks() {
+            document.addEventListener('click', function (e) {
+                const el = e.target.closest('[data-book-id]');
+                if (!el) return;
+                const id = el.getAttribute('data-book-id');
+                const action = el.getAttribute('data-action');
+                try {
+                    if (action === 'add') { addToShelf(id); return; }
+                    if (action === 'remove') { removeFromShelf(id); return; }
+                    if (el.classList.contains('book-cover-box')) {
+                        Promise.resolve(openBook(id)).catch(function (err) {
+                            alert('点书出错：' + (err && err.message ? err.message : err) + '\n把这句话截图发给 AI，就能对症下药地修。');
+                            console.error(err);
+                        });
+                    }
+                } catch (err) {
+                    alert('点击出错：' + (err && err.message ? err.message : err));
+                    console.error(err);
+                }
+            });
+        }
+
+        window.onload = function () { bindGlobalClicks(); loadStore(); };
     </script>
 </body>
 </html>
