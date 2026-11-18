@@ -321,6 +321,7 @@
             if (fetched) {
                 try { localStorage.setItem("cache_store", JSON.stringify(allBooks)); } catch (e) {}
                 renderBooks();
+                prefetchCatalogs();   // 后台悄悄把每本书的目录先存一份
             } else if (!cached) {
                 document.getElementById("store-list").innerHTML = `<div class="loading">加载失败，请检查网络。</div>`;
             }
@@ -402,27 +403,31 @@
             document.getElementById("detail-title").innerText = currentBook.title;
             
             const list = document.getElementById("chapter-list");
-            list.innerHTML = "<div class='loading'>正在加载目录...</div>";
+            const catKey = "cache_catalog_" + currentBook.id;
+
+            // 【关键】有缓存就地先把目录画出来，一秒都不用等；网络请求丢到后台慢慢跑
+            const cachedCat = localStorage.getItem(catKey);
+            let shownFromCache = false;
+            if (cachedCat) {
+                try { renderChapters(JSON.parse(cachedCat)); shownFromCache = true; } catch (e0) {}
+            }
+            if (!shownFromCache) list.innerHTML = "<div class='loading'>正在加载目录...</div>";
             history.pushState({ page: 'catalog' }, '');
 
             try {
                 const res = await fetch(getFreshUrl(BASE_URL, currentBook.folder + "/catalog.json"));
                 const catalog = await res.json();
-                try { localStorage.setItem("cache_catalog_" + currentBook.id, JSON.stringify(catalog)); } catch (e2) {}
-                renderChapters(catalog);
+                try { localStorage.setItem(catKey, JSON.stringify(catalog)); } catch (e2) {}
+                // 只有内容真的变了才重画，避免闪一下
+                if (!shownFromCache || JSON.stringify(catalog) !== cachedCat) renderChapters(catalog);
             } catch (e) {
                 try {
                     const res = await fetch(getFreshUrl(FALLBACK_URL, currentBook.folder + "/catalog.json"));
                     const catalog = await res.json();
-                    try { localStorage.setItem("cache_catalog_" + currentBook.id, JSON.stringify(catalog)); } catch (e2) {}
-                    renderChapters(catalog);
+                    try { localStorage.setItem(catKey, JSON.stringify(catalog)); } catch (e2) {}
+                    if (!shownFromCache || JSON.stringify(catalog) !== cachedCat) renderChapters(catalog);
                 } catch (err) {
-                    // 断网时用本地存的目录，照样能进书
-                    const cachedCat = localStorage.getItem("cache_catalog_" + currentBook.id);
-                    if (cachedCat) {
-                        try { renderChapters(JSON.parse(cachedCat)); return; } catch (e3) {}
-                    }
-                    list.innerHTML = "<div class='loading'>目录加载失败。</div>";
+                    if (!shownFromCache) list.innerHTML = "<div class='loading'>目录加载失败，请检查网络。</div>";
                 }
             }
         }
@@ -690,6 +695,28 @@
             t.classList.add("show");
             clearTimeout(window.__toastTimer);
             window.__toastTimer = setTimeout(function () { t.classList.remove("show"); }, 1800);
+        }
+
+        // 后台预取目录：把每本书的 catalog.json 先存到本地，第一次进书也能秒开
+        async function prefetchCatalogs() {
+            if (!allBooks || !allBooks.length) return;
+            for (const book of allBooks) {
+                const key = "cache_catalog_" + book.id;
+                if (localStorage.getItem(key)) continue;
+                try {
+                    const res = await fetch(getFreshUrl(BASE_URL, book.folder + "/catalog.json"));
+                    if (!res.ok) throw new Error("bad");
+                    const catalog = await res.json();
+                    try { localStorage.setItem(key, JSON.stringify(catalog)); } catch (e) {}
+                } catch (e) {
+                    try {
+                        const res = await fetch(getFreshUrl(FALLBACK_URL, book.folder + "/catalog.json"));
+                        if (!res.ok) continue;
+                        const catalog = await res.json();
+                        try { localStorage.setItem(key, JSON.stringify(catalog)); } catch (e2) {}
+                    } catch (e3) {}
+                }
+            }
         }
 
         // ---------- 离线缓存：一次性把所有章节存到手机里 ----------
