@@ -80,8 +80,20 @@
         .tool-btn { flex: 1; padding: 10px; background: var(--bg-color); border: 1px solid rgba(128,128,128,0.2); border-radius: 8px; font-size: 14px; cursor: pointer; color: var(--text-color); text-align: center; min-width: 60px;}
         
         .touch-zone { position: absolute; top: 50px; bottom: 0; width: 33.33%; z-index: 15; }
+        /* 上下滑动模式下：把三层透明翻页感应区关掉，否则手指滑动全被它们吃掉，正文根本滚不动 */
+        #reader-view.no-zones .touch-zone { display: none; }
         .zone-left { left: 0; }
         .zone-center { left: 33.33%; }
+
+        /* 右上角齿轮：平时藏着，点一下正文才冒出来；点它才弹设置面板 */
+        #gear-btn {
+            position: fixed; top: 58px; right: 14px; width: 38px; height: 38px;
+            border: none; border-radius: 50%; z-index: 30; cursor: pointer;
+            background: rgba(0,0,0,0.55); color: #fff;
+            display: none; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25); padding: 0;
+        }
+        #gear-btn.show { display: flex; }
         .zone-right { right: 0; }
         
         .loading { text-align: center; padding: 20px; color: #666; width: 100%; }
@@ -114,6 +126,13 @@
         
         <div class="content-box" id="chapter-content">正在加载正文...</div>
         
+        <button id="gear-btn" aria-label="阅读设置" onclick="gearClick(event)">
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                <circle cx="12" cy="12" r="3.3"/>
+                <path d="M12 2.4v2.6M12 19v2.6M2.4 12h2.6M19 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/>
+            </svg>
+        </button>
+
         <div class="touch-zone zone-left" onclick="handleScreenClick('left')"></div>
         <div class="touch-zone zone-center" onclick="handleScreenClick('center')"></div>
         <div class="touch-zone zone-right" onclick="handleScreenClick('right')"></div>
@@ -193,7 +212,12 @@
         document.body.className = currentTheme;
         document.getElementById("chapter-content").style.fontSize = currentFontSize + "px";
 
-        function getFreshUrl(base, path) { return base + path + "?t=" + new Date().getTime(); }
+        function getFreshUrl(base, path) {
+            // 只有"数据清单"需要每次取最新（改了要立刻生效）；
+            // 图片和正文不用：不加时间戳，浏览器和 CDN 才能把它缓存住，第二次就秒开
+            const needFresh = /\.json(\?|$)/.test(path);
+            return base + path + (needFresh ? "?t=" + new Date().getTime() : "");
+        }
         function getShelf() { let shelf = localStorage.getItem("my_shelf"); return shelf ? JSON.parse(shelf) : []; }
         function addToShelf(id) { let s = getShelf(); if(!s.includes(id)){ s.push(id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("store-btn-" + id).className = "app-btn btn-added"; document.getElementById("store-btn-" + id).innerText = "已在书架"; renderShelfOnly(); } }
         function removeFromShelf(id) { let s = getShelf().filter(i => i !== id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("shelf-btn-" + id).className = "app-btn btn-add"; document.getElementById("shelf-btn-" + id).innerText = "+ 加入书架"; document.getElementById("shelf-btn-" + id).onclick = function() { addToShelf(id); }; let sb = document.getElementById("store-btn-" + id); if(sb) { sb.className = "app-btn btn-add"; sb.innerText = "+ 加入书架"; sb.onclick = function() { addToShelf(id); }; } renderShelfOnly(); }
@@ -240,8 +264,8 @@
                 const isAdded = shelfIds.includes(book.id);
                 const progress = getProgress(book.id);
                 const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
-                const imgUrl = getFreshUrl(BASE_URL, book.cover);
-                const imgFallback = getFreshUrl(FALLBACK_URL, book.cover);
+                const imgUrl = getFreshUrl(FALLBACK_URL, book.cover);      // 封面优先走 jsDelivr（有缓存）
+                const imgFallback = getFreshUrl(BASE_URL, book.cover);     // 备胎 ghproxy
                 
                 const storeItem = document.createElement("div");
                 storeItem.className = "book-item";
@@ -271,8 +295,8 @@
                 if (shelfIds.includes(book.id)) {
                     const progress = getProgress(book.id);
                     const badge = progress !== null ? `<div class="read-badge">读至${parseInt(progress)+1}章</div>` : "";
-                    const imgUrl = getFreshUrl(BASE_URL, book.cover);
-                    const imgFallback = getFreshUrl(FALLBACK_URL, book.cover);
+                    const imgUrl = getFreshUrl(FALLBACK_URL, book.cover);      // 封面优先走 jsDelivr（有缓存）
+                    const imgFallback = getFreshUrl(BASE_URL, book.cover);     // 备胎 ghproxy
                     const shelfItem = document.createElement("div");
                     shelfItem.className = "book-item";
                     shelfItem.innerHTML = `
@@ -375,6 +399,7 @@
         }
 
         function applyPagination() {
+            hideGear();   // 换章/切模式时先把齿轮收起来
             const contentDiv = document.getElementById("chapter-content");
             const footer = document.getElementById("footer-bar");
             const readerView = document.getElementById("reader-view");
@@ -382,6 +407,7 @@
             // 如果选了上下滑动模式
             if (currentPageMode === 'scroll') {
                 readerView.classList.remove("paged-mode");
+                readerView.classList.add("no-zones");   // 关掉透明感应区，恢复手指滚动
                 footer.style.display = "none"; // 滑动模式隐藏底部栏
                 contentDiv.innerText = fullText;
                 contentDiv.scrollTop = 0;
@@ -389,6 +415,7 @@
             }
 
             // 左右平移模式，开启分页
+            readerView.classList.remove("no-zones");
             readerView.classList.add("paged-mode");
             footer.style.display = "flex"; // 显示底部栏（切章+页码）
             
@@ -431,14 +458,14 @@
             }
 
             if (currentPageMode === 'scroll') {
-                toggleSettingsDrawer(); 
+                showGear();          // 点一下正文：只让齿轮冒头，不弹面板
             } else {
                 if (zone === 'left') {
                     flipPage('prev');
                 } else if (zone === 'right') {
                     flipPage('next');
                 } else {
-                    toggleSettingsDrawer();
+                    showGear();      // 点屏幕中间：同样是唤出齿轮
                 }
             }
         }
@@ -506,6 +533,27 @@
 
         window.addEventListener('popstate', function(e) { goBack(); });
 
+        function showGear() {
+            const g = document.getElementById("gear-btn");
+            if (g) g.classList.add("show");
+        }
+        function hideGear() {
+            const g = document.getElementById("gear-btn");
+            if (g) g.classList.remove("show");
+        }
+        function toggleGear() {
+            const g = document.getElementById("gear-btn");
+            if (!g) return;
+            g.classList.contains("show") ? g.classList.remove("show") : g.classList.add("show");
+        }
+        // 点齿轮：先收起齿轮，再弹出设置面板
+        function gearClick(e) {
+            if (e) e.stopPropagation();
+            hideGear();
+            const drawer = document.getElementById("settings-drawer");
+            if (!drawer.classList.contains("open")) toggleSettingsDrawer();
+        }
+
         function toggleSettingsDrawer() {
             const drawer = document.getElementById("settings-drawer");
             const header = document.getElementById("main-header");
@@ -517,6 +565,7 @@
                 // 如果是分页模式，隐藏底部切章栏
                 if(currentPageMode === 'slide') footer.style.bottom = "-100px"; 
             } else {
+                hideGear();
                 drawer.classList.add("open");
                 header.classList.add("hidden");
                 // 呼出菜单时，顺便把底部切章栏也顶上来
@@ -628,7 +677,20 @@
             });
         }
 
-        window.onload = function () { bindGlobalClicks(); loadStore(); };
+        window.onload = function () {
+            bindGlobalClicks();
+            // 滑动模式下遮罩已关掉，用"点一下正文"来唤出设置面板；拖动不会触发 click，所以不影响滚动
+            const contentDiv = document.getElementById("chapter-content");
+            if (contentDiv) {
+                contentDiv.addEventListener('click', function () {
+                    if (currentPageMode !== 'scroll') return;
+                    const drawer = document.getElementById("settings-drawer");
+                    if (drawer.classList.contains("open")) { toggleSettingsDrawer(); return; }
+                    toggleGear();          // 点正文：齿轮出现/消失，面板不动
+                });
+            }
+            loadStore();
+        };
     </script>
 </body>
 </html>
