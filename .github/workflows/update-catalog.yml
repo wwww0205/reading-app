@@ -1,0 +1,39 @@
+name: 自动更新章节目录
+
+# 触发条件：你往 main 分支传了 books/ 里的东西，或者手动点一下按钮
+on:
+  push:
+    branches: [main]
+    paths:
+      - "books/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 把仓库拉下来
+        uses: actions/checkout@v4
+
+      - name: 装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: 扫描章节、更新 catalog.json
+        run: python tools/update_catalog.py
+
+      - name: 有变化就自动提交
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "目录没有变化，不需要提交"
+            exit 0
+          fi
+          git config user.name "目录自动维护机器人"
+          git config user.email "actions@users.noreply.github.com"
+          git add books
+          git commit -m "自动更新章节目录"
+          git push
