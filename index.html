@@ -80,6 +80,23 @@
         .footer-btn { background: transparent; border: 1px solid rgba(128,128,128,0.3); padding: 5px 15px; border-radius: 15px; font-size: 13px; cursor: pointer; color: var(--text-color);}
         .footer-center { font-size: 12px; color: #888; display: flex; flex-direction: column; align-items: center;}
 
+        /* 阅读页侧滑目录：盖住左边 6 成多，右边露出正文，点一下露出的地方就收起 */
+        #toc-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.42); opacity: 0; pointer-events: none; transition: opacity 0.25s; z-index: 60; }
+        #toc-mask.open { opacity: 1; pointer-events: auto; }
+        #toc-drawer {
+            position: fixed; top: 0; left: 0; width: 64%; max-width: 360px; height: 100vh;
+            background: var(--bg-color); color: var(--text-color);
+            box-shadow: 3px 0 16px rgba(0,0,0,0.28);
+            transform: translateX(-103%); transition: transform 0.28s ease;
+            z-index: 61; display: flex; flex-direction: column;
+        }
+        #toc-drawer.open { transform: translateX(0); }
+        .toc-header { display: flex; justify-content: space-between; align-items: center; padding: 64px 16px 12px; border-bottom: 1px solid rgba(128,128,128,0.18); font-weight: bold; font-size: 15px; flex: 0 0 auto; }
+        .toc-close { font-size: 20px; line-height: 1; padding: 0 4px; cursor: pointer; color: #888; }
+        .toc-list { list-style: none; margin: 0; padding: 6px 0 40px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; flex: 1 1 auto; }
+        .toc-item { padding: 13px 16px; font-size: 15px; border-bottom: 1px solid rgba(128,128,128,0.1); cursor: pointer; }
+        .toc-item.active { color: var(--theme-color); font-weight: bold; background: rgba(128,128,128,0.08); }
+
         /* 底部设置面板 */
         .settings-drawer { position: fixed; bottom: -110%; left: 0; width: 100%; background: var(--card-bg); border-top-left-radius: 15px; border-top-right-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 40; transition: bottom 0.3s; display: flex; flex-direction: column; padding-bottom: 20px; max-height: 82vh; overflow-y: auto; -webkit-overflow-scrolling: touch;}
         .settings-drawer.open { bottom: 0; }
@@ -206,9 +223,18 @@
 
     <div id="page-measure"></div>
 
+    <div id="toc-mask" onclick="closeToc()"></div>
+    <aside id="toc-drawer">
+        <div class="toc-header">
+            <span id="toc-title">目录</span>
+            <span class="toc-close" onclick="closeToc()">×</span>
+        </div>
+        <ul class="toc-list" id="toc-list"></ul>
+    </aside>
+
     <div id="bottom-panel">
         <button id="panel-prev" onclick="chapterStep(-1)">« 上一章</button>
-        <button id="panel-catalog" onclick="openCatalogFromReader()">☰ 目录</button>
+        <button id="panel-catalog" onclick="openToc()">☰ 目录</button>
         <button id="panel-next" onclick="chapterStep(1)">下一章 »</button>
     </div>
 
@@ -264,6 +290,9 @@
         let currentBook = null;
         let currentCatalog = [];
         let currentChapterIndex = -1;
+        let currentTab = 'store';          // 记住最后停在书城还是书架
+        let navStack = ['store'];          // 我们自己维护的页面栈：store / catalog / reader
+        let expectPop = 0;                 // 我们自己按了返回、已经同步切过页面，忽略那一次 popstate
         
         let currentFontSize = parseInt(localStorage.getItem("read_font")) || 17;
         let currentTheme = localStorage.getItem("read_theme") || '';
@@ -287,6 +316,31 @@
             const needFresh = /\.json(\?|$)/.test(path);
             return base + path + (needFresh ? "?t=" + new Date().getTime() : "");
         }
+        // 【防劫持】服务器限流（429）、网关报错、404 页面都不能当正文用
+        const BAD_TEXT = /(Too Many Requests|Rate limit|429|<!DOCTYPE|<html|Bad Gateway|502 Bad|503 Service|404: Not Found)/i;
+        function looksLikeError(t) {
+            if (!t) return true;
+            if (t.length < 60) return true;
+            return BAD_TEXT.test(t.slice(0, 400));
+        }
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+        // 依次尝试两个通道，非 200、或者内容像报错页，就换下一个；最后再整体重试一轮
+        async function fetchTextSafe(path) {
+            const urls = [getFreshUrl(BASE_URL, path), getFreshUrl(FALLBACK_URL, path)];
+            for (let round = 0; round < 2; round++) {
+                for (let i = 0; i < urls.length; i++) {
+                    try {
+                        const res = await fetch(urls[i]);
+                        if (!res.ok) throw new Error("HTTP " + res.status);
+                        const t = await res.text();
+                        if (looksLikeError(t)) throw new Error("内容异常");
+                        return t;
+                    } catch (e) { /* 换下一个通道 */ }
+                }
+                if (round === 0) await sleep(1200);   // 两个都挂了，等一秒再来一轮
+            }
+            return null;
+        }
         function getShelf() { let shelf = localStorage.getItem("my_shelf"); return shelf ? JSON.parse(shelf) : []; }
         function addToShelf(id) { let s = getShelf(); if(!s.includes(id)){ s.push(id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("store-btn-" + id).className = "app-btn btn-added"; document.getElementById("store-btn-" + id).innerText = "已在书架"; renderShelfOnly(); } }
         function removeFromShelf(id) { let s = getShelf().filter(i => i !== id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("shelf-btn-" + id).className = "app-btn btn-add"; document.getElementById("shelf-btn-" + id).innerText = "+ 加入书架"; document.getElementById("shelf-btn-" + id).onclick = function() { addToShelf(id); }; let sb = document.getElementById("store-btn-" + id); if(sb) { sb.className = "app-btn btn-add"; sb.innerText = "+ 加入书架"; sb.onclick = function() { addToShelf(id); }; } renderShelfOnly(); }
@@ -294,6 +348,7 @@
         function saveProgress(id, index) { localStorage.setItem("progress_" + id, index); }
 
         function switchTab(tab) {
+            currentTab = tab;
             setHomeGear(true);
             document.getElementById('main-tabs').style.display = 'flex';
             document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
@@ -405,13 +460,8 @@
             if (!currentBook) return;
             stopSpeech();
             
-            document.getElementById("store-view").style.display = "none";
-            document.getElementById("shelf-view").style.display = "none";
-            document.getElementById("main-tabs").style.display = "none";
-            document.getElementById("detail-view").style.display = "block";
-            setHeaderTitle("目录");
-            document.getElementById("back-btn").style.visibility = "visible";
             document.getElementById("detail-title").innerText = currentBook.title;
+            pushView('catalog');
             
             const list = document.getElementById("chapter-list");
             const catKey = "cache_catalog_" + currentBook.id;
@@ -423,7 +473,6 @@
                 try { renderChapters(JSON.parse(cachedCat)); shownFromCache = true; } catch (e0) {}
             }
             if (!shownFromCache) list.innerHTML = "<div class='loading'>正在加载目录...</div>";
-            history.pushState({ page: 'catalog' }, '');
 
             try {
                 const res = await fetch(getFreshUrl(BASE_URL, currentBook.folder + "/catalog.json"));
@@ -467,9 +516,7 @@
             const chap = currentCatalog[index];
             saveProgress(currentBook.id, index);
 
-            document.getElementById("detail-view").style.display = "none";
-            document.getElementById("reader-view").style.display = "block";
-            setHeaderTitle("阅读");
+            pushView('reader');
             document.getElementById("chapter-title").innerText = chap.title;
 
             const contentDiv = document.getElementById("chapter-content");
@@ -479,18 +526,16 @@
             contentDiv.innerText = "正在加载正文...";
 
             let text = localStorage.getItem(cacheKey);
+            // 上次可能把"429 / 502 / 404"的报错页当成正文存进来了，发现就丢掉
+            if (text && looksLikeError(text)) { localStorage.removeItem(cacheKey); text = null; }
             if (!text) {
-                try {
-                    const res = await fetch(getFreshUrl(BASE_URL, chapterUrl));
-                    text = await res.text();
-                    localStorage.setItem(cacheKey, text);
-                } catch (e) {
-                    try {
-                        const res = await fetch(getFreshUrl(FALLBACK_URL, chapterUrl));
-                        text = await res.text();
-                        localStorage.setItem(cacheKey, text);
-                    } catch (err) { contentDiv.innerText = "正文加载失败。"; return; }
+                contentDiv.innerText = "正在加载正文...";
+                text = await fetchTextSafe(chapterUrl);
+                if (!text) {
+                    contentDiv.innerText = "网络繁忙，正文没取到。\n\n稍等几秒再点这一章重试，或者换个网络（流量/WiFi）试试。";
+                    return;
                 }
+                localStorage.setItem(cacheKey, text);
             }
             fullText = text;
             applyPagination(); 
@@ -624,25 +669,115 @@
             h.appendChild(ind);
         }
 
-        function goBack() {
-            setHomeGear(true);
-            document.getElementById("settings-drawer").classList.remove("open");
-            document.getElementById("main-header").classList.remove("hidden");
-            stopSpeech();
+        // ---------- 页面切换：store(书城/书架) → catalog(目录) → reader(正文) ----------
+        function applyView(v) {
+            const dv = document.getElementById("detail-view");
+            const rv = document.getElementById("reader-view");
+            const tabs = document.getElementById("main-tabs");
+            const back = document.getElementById("back-btn");
 
-            if (document.getElementById("reader-view").style.display === "block") {
-                document.getElementById("reader-view").style.display = "none";
-                document.getElementById("detail-view").style.display = "block";
+            if (v === 'reader') {
+                dv.style.display = "none";
+                document.getElementById("store-view").style.display = "none";
+                document.getElementById("shelf-view").style.display = "none";
+                rv.style.display = "block";
+                tabs.style.display = "none";
+                back.style.visibility = "visible";
+                setHomeGear(false);
+                setHeaderTitle("阅读");
+            } else if (v === 'catalog') {
+                rv.style.display = "none";
+                document.getElementById("store-view").style.display = "none";
+                document.getElementById("shelf-view").style.display = "none";
+                dv.style.display = "block";
+                tabs.style.display = "none";
+                back.style.visibility = "visible";
+                setHomeGear(true);
                 setHeaderTitle("目录");
-            } else if (document.getElementById("detail-view").style.display === "block") {
-                document.getElementById("detail-view").style.display = "none";
-                document.getElementById("main-tabs").style.display = "flex";
-                document.getElementById("back-btn").style.visibility = "hidden";
-                switchTab('store'); 
+            } else {
+                rv.style.display = "none";
+                dv.style.display = "none";
+                if (document.getElementById("toc-drawer").classList.contains("open")) closeToc();
+                back.style.visibility = "hidden";
+                switchTab(currentTab);
             }
         }
 
-        window.addEventListener('popstate', function(e) { goBack(); });
+        // 往前跳一层：记进栈，同时给浏览器补一条历史，安卓返回键才不会把人直接踢回桌面
+        function pushView(v) {
+            if (navStack[navStack.length - 1] === v) return;
+            navStack.push(v);
+            try { history.pushState({ v: v }, ''); } catch (e) {}
+            applyView(v);
+        }
+
+        function goBack() {
+            // 侧滑目录开着，先收目录
+            if (document.getElementById("toc-drawer").classList.contains("open")) { closeToc(); return; }
+            // 设置面板开着，先收面板
+            const drawer = document.getElementById("settings-drawer");
+            if (drawer && drawer.classList.contains("open")) { drawer.classList.remove("open"); return; }
+            stopSpeech();
+            hideTools();
+
+            if (navStack.length > 1) {
+                navStack.pop();
+                applyView(navStack[navStack.length - 1]);
+                expectPop++;                      // 下面这次 history.back 是我们自己动作，别再重复弹一层
+                try { history.back(); } catch (e) {}
+            } else {
+                applyView("store");               // 已经在最外层，就停在书城/书架，不退出 App
+            }
+        }
+
+        window.addEventListener('popstate', function () {
+            if (document.getElementById("toc-drawer").classList.contains("open")) { closeToc(true); return; }
+            if (expectPop > 0) { expectPop--; return; }   // 我们主动触发的那次，页面已经切过了
+            if (navStack.length > 1) {
+                navStack.pop();
+                applyView(navStack[navStack.length - 1] || "store");
+            } else {
+                // 已经在最外层（书城/书架）：返回键就停在这儿，顺手补一条历史，免得下一次直接把人踢出 App
+                applyView("store");
+                try { history.pushState({ v: "store" }, ''); } catch (e) {}
+            }
+        });
+
+        // ---------- 阅读页侧滑目录（遮住左边六成多，点右边正文就收） ----------
+        function openToc() {
+            if (!currentCatalog || !currentCatalog.length) { toast("目录还没加载好"); return; }
+            hideTools();
+            document.getElementById("toc-title").innerText = currentBook ? currentBook.title : "目录";
+            const list = document.getElementById("toc-list");
+            list.innerHTML = "";
+            currentCatalog.forEach(function (c, i) {
+                const li = document.createElement("li");
+                li.className = "toc-item" + (i === currentChapterIndex ? " active" : "");
+                li.innerText = c.title;
+                li.onclick = function () { closeToc(); loadChapter(i, 1); };
+                list.appendChild(li);
+            });
+            document.getElementById("toc-mask").classList.add("open");
+            document.getElementById("toc-drawer").classList.add("open");
+            // 单独占一条历史：安卓返回键第一下只收目录，不会直接跳回上一页
+            try { history.pushState({ toc: true }, ''); } catch (e) {}
+            // 打开时把当前在读的那一章滚到中间
+            setTimeout(function () {
+                const act = list.querySelector(".toc-item.active");
+                if (act) act.scrollIntoView({ block: "center" });
+            }, 80);
+        }
+
+        function closeToc(byHistory) {
+            const wasOpen = document.getElementById("toc-drawer").classList.contains("open");
+            document.getElementById("toc-mask").classList.remove("open");
+            document.getElementById("toc-drawer").classList.remove("open");
+            // 手动关（点右边/点×/点「上一章」返回）时，把那条占位历史退掉，别攒出一堆空白记录
+            if (wasOpen && !byHistory && history.state && history.state.toc) {
+                expectPop++;
+                try { history.back(); } catch (e) {}
+            }
+        }
 
         // ---------- 阅读操作层：右上角工具条 + 底部面板，一起出现一起收 ----------
         function panelsVisible() {
@@ -669,10 +804,9 @@
             panelsVisible() ? hideTools() : showTools();
         }
 
-        // 底部面板的「目录」：回到这本书的章节目录页
+        // 底部面板的「目录」：从左边滑出目录，不离开正文
         function openCatalogFromReader() {
-            hideTools();
-            goBack();
+            openToc();
         }
         // 旧函数名保留（别处还在调用），行为统一：控制整个工具条
         function showGear() { showTools(); }
@@ -774,17 +908,7 @@
                 if (st) st.textContent = `正在缓存… ${i + 1} / ${currentCatalog.length}`;
                 if (!localStorage.getItem(key)) {
                     const url = book.folder + "/" + currentCatalog[i].file;
-                    let text = null;
-                    try {
-                        const r = await fetch(getFreshUrl(BASE_URL, url));
-                        if (r.ok) text = await r.text();
-                    } catch (e1) {}
-                    if (!text) {
-                        try {
-                            const r = await fetch(getFreshUrl(FALLBACK_URL, url));
-                            if (r.ok) text = await r.text();
-                        } catch (e2) {}
-                    }
+                    const text = await fetchTextSafe(url);
                     if (text) {
                         try { localStorage.setItem(key, text); } catch (e3) {
                             if (st) st.textContent = `手机存储空间不够，缓存到第 ${i + 1} 章就满了`;
@@ -1041,6 +1165,8 @@
         window.onload = function () {
             bindGlobalClicks();
             bindSwipe();
+            // 给浏览器垫一条"首页"历史记录：安卓返回键按到最底层时停在这里，不会直接退出到桌面
+            try { history.replaceState({ v: 'store' }, ''); } catch (e) {}
             function relayout() {
                 clearTimeout(window.__resizeTimer);
                 window.__resizeTimer = setTimeout(function () {
