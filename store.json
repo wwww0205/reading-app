@@ -5,5 +5,12 @@
     "author": "priest",
     "cover": "covers/book_01.png",
     "folder": "books/book_01"
+  },
+  {
+    "id": "book_02",
+    "title": "年少无名",
+    "author": "诗无茶",
+    "cover": "covers/book_02.png",
+    "folder": "books/book_02"
   }
 ]
