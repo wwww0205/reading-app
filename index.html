@@ -39,7 +39,8 @@
         .btn-added { background: #e0e0e0; color: #888; cursor: default; }
         .btn-remove { background: #ffebee; color: #d32f2f; }
 
-        #detail-view { display: none; background: var(--bg-color); min-height: 100vh; color: var(--text-color); padding-top: 50px;}
+        #detail-view { display: none; background: var(--bg-color); color: var(--text-color); padding-top: 50px;
+            height: 100vh; box-sizing: border-box; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;}
         .chapter-list { list-style: none; padding: 15px; padding-bottom: 70px;}
         .chapter-item { padding: 15px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 16px; }
         
@@ -145,6 +146,7 @@
         <span id="header-title" style="flex:1; text-align:center; padding-right:70px; display:flex; justify-content:center; align-items:center;">
             阅读器 <span id="audio-indicator" class="audio-status">🔊 播放中</span>
         </span>
+        <span id="home-gear" class="header-btn" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); padding:4px 6px; font-size:19px; line-height:1;" onclick="toggleSettingsDrawer()" aria-label="设置">⚙</span>
     </div>
 
     <div id="store-view" class="view-section" style="display: block;">
@@ -285,6 +287,7 @@
         function saveProgress(id, index) { localStorage.setItem("progress_" + id, index); }
 
         function switchTab(tab) {
+            setHomeGear(true);
             document.getElementById('main-tabs').style.display = 'flex';
             document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
             if (tab === 'store') {
@@ -390,6 +393,7 @@
         }
 
         async function openBook(bookId) {
+            setHomeGear(true);
             currentBook = allBooks.find(b => b.id === bookId);
             if (!currentBook) return;
             stopSpeech();
@@ -447,6 +451,7 @@
         }
 
         async function loadChapter(index, pageToGo) {
+            setHomeGear(false);
             if (index < 0) { alert("已经是第一章了！"); return; }
             if (index >= currentCatalog.length) { alert("已经是最后一章了！"); return; }
             
@@ -613,6 +618,7 @@
         }
 
         function goBack() {
+            setHomeGear(true);
             document.getElementById("settings-drawer").classList.remove("open");
             document.getElementById("main-header").classList.remove("hidden");
             stopSpeech();
@@ -788,12 +794,24 @@
         }
 
         function clearCache() {
-            const book = currentBook || allBooks[0];
-            if (!book) { toast("先打开一本书"); return; }
-            const total = (currentCatalog && currentCatalog.length) ? currentCatalog.length : 50;
-            for (let i = 0; i < total + 5; i++) localStorage.removeItem(cacheKeyOf(book.id, i));
+            // 真正意义上的"全清"：书单、目录、所有章节正文一起删掉
+            // 只保留 read_font / read_theme / read_page 这类你的个人设置
+            const keep = ["read_font", "read_theme", "read_page"];
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (keep.indexOf(k) === -1) keys.push(k);
+            }
+            keys.forEach(function (k) { localStorage.removeItem(k); });
             updateCacheStatus();
-            toast("已清空这本书的缓存");
+            toast("已清空全部缓存，下次打开会重新下载");
+            if (allBooks && allBooks.length) { loadStore(); }
+        }
+
+        // 首页齿轮：进阅读页时藏起来（阅读页有自己的齿轮），回书城/书架/目录时显示
+        function setHomeGear(show) {
+            const g = document.getElementById("home-gear");
+            if (g) g.style.visibility = show ? "visible" : "hidden";
         }
 
         // ---------- 左右滑动手势（真的能滑，不只是点） ----------
