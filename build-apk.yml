@@ -1,0 +1,174 @@
+name: 打包成安卓 APK
+
+# 只有在 Actions 页面手动点「Run workflow」才会跑
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 装 Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 装 Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: 现场搭一个安卓工程（不用你上传一堆文件）
+        run: |
+          set -e
+          P=android-app
+          mkdir -p $P/app/src/main/java/com/wwww0205/reader
+          mkdir -p $P/app/src/main/res/mipmap-xxxhdpi
+          mkdir -p $P/app/src/main/res/values
+
+          cat > $P/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "youfei-reader"
+          include ':app'
+          EOF
+
+          cat > $P/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
+          }
+          EOF
+
+          cat > $P/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=false
+          EOF
+
+          cat > $P/app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.wwww0205.reader'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.wwww0205.reader"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  debug { }
+                  release { minifyEnabled false }
+              }
+          }
+          EOF
+
+          cat > $P/app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:label="潜龙在渊"
+                  android:icon="@mipmap/ic_launcher"
+                  android:usesCleartextTraffic="true"
+                  android:hardwareAccelerated="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden"
+                      android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > $P/app/src/main/java/com/wwww0205/reader/MainActivity.java <<'EOF'
+          package com.wwww0205.reader;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.view.KeyEvent;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+
+              // ↓↓↓ 想换成别的网址，只改这一行 ↓↓↓
+              private static final String HOME_URL = "https://wwww0205.github.io/reading-app/";
+
+              private WebView web;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  web = new WebView(this);
+                  WebSettings s = web.getSettings();
+                  s.setJavaScriptEnabled(true);      // 页面要跑 JS
+                  s.setDomStorageEnabled(true);      // 书单/目录/正文的本地缓存要用
+                  s.setDatabaseEnabled(true);
+                  s.setCacheMode(WebSettings.LOAD_DEFAULT);
+                  s.setMediaPlaybackRequiresUserGesture(false);
+                  s.setAllowFileAccess(false);
+                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+
+                  web.setWebViewClient(new WebViewClient());
+                  web.setWebChromeClient(new WebChromeClient());
+
+                  web.loadUrl(HOME_URL);
+                  setContentView(web);
+              }
+
+              // 手机返回键：网页能后退就先后退，退不动才退出 App
+              @Override
+              public boolean onKeyDown(int keyCode, KeyEvent event) {
+                  if (keyCode == KeyEvent.KEYCODE_BACK && web != null && web.canGoBack()) {
+                      web.goBack();
+                      return true;
+                  }
+                  return super.onKeyDown(keyCode, event);
+              }
+
+              @Override
+              protected void onDestroy() {
+                  if (web != null) { web.destroy(); web = null; }
+                  super.onDestroy();
+              }
+          }
+          EOF
+
+          # 图标：优先抓你网页上的 icon-512.png；抓不到就用内置的备用图标
+          ICON=$P/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          if ! curl -fsSL -o "$ICON" https://wwww0205.github.io/reading-app/icon-512.png 2>/dev/null; then
+            if ! curl -fsSL -o "$ICON" https://raw.githubusercontent.com/wwww0205/reading-app/main/icon-512.png 2>/dev/null; then
+              echo "抓不到你自己的图标，改用内置备用图标"
+              echo 'iVBORw0KGgoAAAANSUhEUgAAAJAAAACQCAIAAABoJHXvAAABGklEQVR42u3dsQmAMBBAUSPp0t4Egq3zOaet4CwOIYkmvj+AxT1OrkuKiEn9NBsBMAETMGACJmDABEzAgAmYgAETMAEDJmACBkzABAyYgAkYMAETMGDqqVzv09d5/Hmyy7rZMAEDJmAC5kp88XD6Qs1OYhvmlyhgAgZMwAQMmIAJGDABEzBgAiZgwARMwIAJmIABEzABAyZgAgZMwARMwIAJmIABEzABAyZgAgZMwAQMmIAJGDABEzBgAiZgwARMwIAJmIAJGDABEzBgAiZgwARMwIAJmICNWtOHt5u9Tm3DBEzAgAmYnpUiwhRsmIAJGDABEzBgAiZgY5T3UkzBhgmYgAETMAEDJmACBkzABAyYgAkYMAETsOG7ARUmCriJHaJBAAAAAElFTkSuQmCC' | base64 -d > "$ICON"
+            fi
+          fi
+          file "$ICON"
+
+          echo "工程搭好了"
+          find $P -type f | sort
+
+      - name: 编译 APK
+        run: |
+          cd android-app
+          gradle assembleDebug --no-daemon --stacktrace
+
+      - name: 把 APK 传上来（在运行页面的 Artifacts 里下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: 潜龙在渊-APK
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+#（注：内容由AI生成）
