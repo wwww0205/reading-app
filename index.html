@@ -170,7 +170,7 @@
         <span id="header-title" style="flex:1; text-align:center; padding-right:70px; display:flex; justify-content:center; align-items:center;">
             阅读器 <span id="audio-indicator" class="audio-status">🔊 播放中</span>
         </span>
-        <span id="home-gear" class="header-btn" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); padding:4px 6px; font-size:19px; line-height:1;" onclick="toggleSettingsDrawer()" aria-label="设置">⚙</span>
+        <span id="home-gear" style="display:none;" aria-hidden="true"></span>
     </div>
 
     <div id="store-view" class="view-section" style="display: block;">
@@ -345,7 +345,29 @@
         function addToShelf(id) { let s = getShelf(); if(!s.includes(id)){ s.push(id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("store-btn-" + id).className = "app-btn btn-added"; document.getElementById("store-btn-" + id).innerText = "已在书架"; renderShelfOnly(); } }
         function removeFromShelf(id) { let s = getShelf().filter(i => i !== id); localStorage.setItem("my_shelf", JSON.stringify(s)); document.getElementById("shelf-btn-" + id).className = "app-btn btn-add"; document.getElementById("shelf-btn-" + id).innerText = "+ 加入书架"; document.getElementById("shelf-btn-" + id).onclick = function() { addToShelf(id); }; let sb = document.getElementById("store-btn-" + id); if(sb) { sb.className = "app-btn btn-add"; sb.innerText = "+ 加入书架"; sb.onclick = function() { addToShelf(id); }; } renderShelfOnly(); }
         function getProgress(id) { return localStorage.getItem("progress_" + id); }
-        function saveProgress(id, index) { localStorage.setItem("progress_" + id, index); }
+        function saveProgress(id, index) { localStorage.setItem("progress_" + id, index); refreshBadges(); }
+
+        // 只把"读至第几章"角标就地更新，不重建整个列表（否则封面会重新下载、闪一下）
+        function refreshBadges() {
+            const boxes = document.querySelectorAll('.book-cover-box[data-book-id]');
+            for (let i = 0; i < boxes.length; i++) {
+                const box = boxes[i];
+                const id = box.getAttribute('data-book-id');
+                if (!id) continue;
+                const p = getProgress(id);
+                let badge = box.querySelector('.read-badge');
+                if (p === null || p === undefined || p === '') {
+                    if (badge) badge.remove();
+                    continue;
+                }
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.className = 'read-badge';
+                    box.appendChild(badge);
+                }
+                badge.innerText = '读至' + (parseInt(p) + 1) + '章';
+            }
+        }
 
         function switchTab(tab) {
             currentTab = tab;
@@ -363,6 +385,7 @@
                 document.getElementById("shelf-view").style.display = "block";
                 setHeaderTitle("书架");
             }
+            refreshBadges();   // 回到列表时刷新"读至第几章"
         }
 
         async function loadStore() {
@@ -611,16 +634,23 @@
                 toggleSettingsDrawer();
                 return;
             }
+            if (document.getElementById("toc-drawer").classList.contains('open')) {
+                closeToc();
+                return;
+            }
+
+            // 工具条已经在显示：这一下只管收起来，不翻页
+            if (panelsVisible()) { hideTools(); return; }
 
             if (currentPageMode === 'scroll') {
-                showGear();          // 点一下正文：只让齿轮冒头，不弹面板
+                showTools();          // 点一下正文：呼出下面那一排
             } else {
                 if (zone === 'left') {
                     flipPage('prev');
                 } else if (zone === 'right') {
                     flipPage('next');
                 } else {
-                    showGear();      // 点屏幕中间：同样是唤出齿轮
+                    showTools();      // 点屏幕中间：呼出下面那一排
                 }
             }
         }
@@ -941,8 +971,9 @@
 
         // 首页齿轮：进阅读页时藏起来（阅读页有自己的齿轮），回书城/书架/目录时显示
         function setHomeGear(show) {
+            // 书城/书架不再放设置按钮：设置只在阅读页里，点一下正文呼出的那一排里进
             const g = document.getElementById("home-gear");
-            if (g) g.style.visibility = show ? "visible" : "hidden";
+            if (g) g.style.display = "none";
         }
 
         // ---------- 左右滑动手势（真的能滑，不只是点） ----------
@@ -1166,7 +1197,7 @@
             bindGlobalClicks();
             bindSwipe();
             // 给浏览器垫一条"首页"历史记录：安卓返回键按到最底层时停在这里，不会直接退出到桌面
-            try { history.replaceState({ v: 'store' }, ''); } catch (e) {}
+            try { history.replaceState({ v: 'store' }, ''); history.pushState({ v: 'store', guard: true }, ''); } catch (e) {}
             function relayout() {
                 clearTimeout(window.__resizeTimer);
                 window.__resizeTimer = setTimeout(function () {
