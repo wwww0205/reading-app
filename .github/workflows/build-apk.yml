@@ -61,9 +61,17 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              signingConfigs {
+                  fixed {
+                      storeFile file('../reader.jks')
+                      storePassword "reader123"
+                      keyAlias "reader"
+                      keyPassword "reader123"
+                  }
+              }
               buildTypes {
-                  debug { }
-                  release { minifyEnabled false }
+                  debug { signingConfig signingConfigs.fixed }
+                  release { minifyEnabled false; signingConfig signingConfigs.fixed }
               }
           }
           EOF
@@ -126,7 +134,10 @@ jobs:
                   web.setWebViewClient(new WebViewClient());
                   web.setWebChromeClient(new WebChromeClient());
 
-                  web.loadUrl(HOME_URL);
+                  // 每次启动给网址加一串随机数：让 WebView 必须去网上取最新的 index.html，
+                  // 不再吃旧缓存。封面/章节仍走正常缓存，不影响速度，也不用再手动清缓存。
+                  String url = HOME_URL + (HOME_URL.contains("?") ? "&" : "?") + "v=" + System.currentTimeMillis();
+                  web.loadUrl(url);
                   setContentView(web);
               }
 
@@ -161,6 +172,13 @@ jobs:
           echo "工程搭好了"
           find $P -type f | sort
 
+      - name: 写入固定签名（以后升级能直接覆盖安装，不用卸载）
+        run: |
+          base64 -d <<'KEY' > android-app/reader.jks
+          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
+          KEY
+          ls -l android-app/reader.jks
+
       - name: 编译 APK
         run: |
           cd android-app
@@ -171,4 +189,3 @@ jobs:
         with:
           name: 潜龙在渊-APK
           path: android-app/app/build/outputs/apk/debug/app-debug.apk
-#（注：内容由AI生成）
